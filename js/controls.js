@@ -13,7 +13,7 @@ function NormalControls (init_eye, init_at, init_up) {
 	var moveDownBool = false;		// should be changed by keydown even listener
 	var moveForwardBool = false;	// should be changed by keydown even listener
 	var moveBackwardBool = false;	// should be changed by keydown even listener
-	var spd = 0.001; // distance per milisecond
+	var spd = 0.005; // distance per milisecond
 	var dt; // time in miliseconds - passed at every frame (dt since last frame)
 	
 	return {
@@ -198,7 +198,8 @@ function NoclipControls (init_eye, init_at, init_up) {
 	var moveDownBool = false;		// should be changed by keydown even listener
 	var moveForwardBool = false;	// should be changed by keydown even listener
 	var moveBackwardBool = false;	// should be changed by keydown even listener
-	var spd = 0.01;
+	var spd = 0.005;
+	var dt;
 	
 	return {
 		
@@ -213,7 +214,8 @@ function NoclipControls (init_eye, init_at, init_up) {
 		moveBackwardBool: moveBackwardBool,
 		normalControls: normalControls,
 		
-		move: function(){
+		move: function(dt_){
+			dt = dt_;
 			this.normalControls.eye = this.eye;
 			this.normalControls.at = this.at;
 			this.normalControls.up = this.up;
@@ -254,12 +256,12 @@ function NoclipControls (init_eye, init_at, init_up) {
 		},
 		update: function(dir){
 			dir = normalize(dir);
-			this.eye[0] += dir[0]*spd;
-			this.eye[1] += dir[1]*spd;
-			this.eye[2] += dir[2]*spd;
-			this.at[0] += dir[0]*spd;
-			this.at[1] += dir[1]*spd;
-			this.at[2] += dir[2]*spd;
+			this.eye[0] += dir[0]*spd*dt;
+			this.eye[1] += dir[1]*spd*dt;
+			this.eye[2] += dir[2]*spd*dt;
+			this.at[0] += dir[0]*spd*dt;
+			this.at[1] += dir[1]*spd*dt;
+			this.at[2] += dir[2]*spd*dt;
 		}
 		
 	}
@@ -328,6 +330,43 @@ function TimeManager(){
 }
 
 
+// this is my solution right now - here all the interactive event callbacks are set
+function bindCallbacks(){
+
+	canvas.onmousemove = Controls.mousemoveCallback;
+	canvas.onmousedown = Controls.mousedownCallback;
+	window.onkeydown = Controls.keydownCallback;
+	window.onkeyup = Controls.keyupCallback;
+	
+	noclipButton.onclick = function (event){
+		if(noclip){
+			Controls = new NormalControls(Controls.eye, Controls.at, Controls.up);
+		} else {
+			Controls = new NoclipControls(Controls.eye, Controls.at, Controls.up);
+		}
+		noclip = !noclip;
+	}
+	
+	fullscreenButton.onclick = function (event){
+		if (!fullscreen){
+			if(canvas.requestFullScreen) {
+				canvas.requestFullScreen();
+			} else if (canvas.webkitRequestFullScreen) {
+				canvas.webkitRequestFullScreen();
+			} else if (canvas.mozRequestFullScreen) {
+				canvas.mozRequestFullScreen();
+			}
+		}
+	}
+	
+	function fullscreenCallback (event){
+		fullscreen = !fullscreen;
+	}
+	document.onmozfullscreenchange = fullscreenCallback;
+	document.onwebkitfullscreenchange = fullscreenCallback;
+	document.fullscreenchange = fullscreenCallback;
+	
+}
 
 
 
