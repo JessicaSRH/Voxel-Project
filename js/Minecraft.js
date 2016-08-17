@@ -61,6 +61,7 @@ var noclip = false;
 var canvas;
 var fullscreenButton;
 var noclipButton;
+var renderModeButton;
 var fpsElement;
 
 // time manager
@@ -80,6 +81,7 @@ window.onload = function(e){
 	canvas = document.getElementById( "gl-canvas" );
 	fullscreenButton = document.getElementById( "fullscreen-button" );
 	noclipButton = document.getElementById( "toggle-noclip-button" );
+	renderModeButton = document.getElementById( "toggle-render-mode-button" );
 	fpsElement = document.getElementById( "fps" );
 	
 	// Should be in a camera object - I will create this later
@@ -106,8 +108,8 @@ window.onload = function(e){
 		}
 	);
 	
-	// World generation
-	World = new WorldManager(gl,passProgram);
+	// Load the chunk manager (world manager)
+	World = new WorldManager(gl, passProgram);
 	
 	// Create pointers to uniform variables in vertex shader
 	modelViewLoc = gl.getUniformLocation(passProgram, "modelView");
@@ -117,7 +119,7 @@ window.onload = function(e){
 	Controls = new NormalControls(vec3(0,20,-2), vec3(0,20,-1), vec3(0,1,0));
 	Time = new TimeManager();
 	
-	// Bind control callbacks
+	// Bind event listener callbacks
 	bindCallbacks();
 	
 	// Initiate render loop
@@ -126,18 +128,20 @@ window.onload = function(e){
 
 
 function render() {
-	now = Date.now();
 	
-	Time.advance(); //update dt since last frame (in miliseconds)
-	Time.updateFPS();
-	Controls.move(Time.dt); // move the player
-	fpsElement.innerHTML = "Framerate: " + Time.fps;
-	
-	// Set up the modelview and projection matrices
+	// Set up the modelView and projection matrices
 	var modelView = lookAt(Controls.eye,Controls.at,Controls.up);
 	var projection = perspective( fovy, aspect, near, far )
 	
-	// clear the color and depth renderbuffers
+	// Manage time
+	Time.advance(); // update dt since last frame (in miliseconds)
+	Time.updateFPS(); // track the FPS
+	fpsElement.innerHTML = "Framerate: " + Time.fps;
+	
+	// Move the player
+	Controls.move(Time.dt);
+	
+	// clear the colour and depth render buffers
     gl.clear( gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 	
 	// Transfer modelView and projection
@@ -145,10 +149,9 @@ function render() {
 	gl.uniformMatrix4fv(modelViewLoc, false, flatten(modelView));
 	gl.uniformMatrix4fv(projectionLoc, false, flatten(projection));
 	
-	// FIRE!
-	// Loop over each chunk
+	// FIRE! (updates the internal world state and renders everything in the render list)
 	World.Update();
-	World.Render();
+	World.Render(passProgram, World.renderMode);
 	
 	// continue render loop
     requestAnimFrame( render );

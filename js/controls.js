@@ -370,6 +370,14 @@ function bindCallbacks(){
 		noclip = !noclip;
 	}
 	
+	renderModeButton.onclick = function(event){
+		if(World.renderMode == gl.TRIANGLES){
+			World.renderMode = gl.LINES;
+		}else if(World.renderMode == gl.LINES){
+			World.renderMode = gl.TRIANGLES;
+		}
+	}
+	
 	fullscreenButton.onclick = function (event){
 		if (!fullscreen){
 			if(canvas.requestFullScreen) {
