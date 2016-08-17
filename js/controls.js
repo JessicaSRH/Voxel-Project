@@ -1,4 +1,4 @@
-
+"use strict"
 
 
 // normal control object
@@ -308,23 +308,46 @@ function TimeManager(){
 	var now;
 	var dt; // time since last frame
 	var previousTime; // timestamp from last frame
-	var updatesPerSecond;
 	
 	now = Date.now();
 	previousTime = now;
+	
+	// variables related to tracking the fps
+	var fps = 0;
+	var fpsNow = Date.now();
+	var fpsThen = now;
+	var fpsTemp
+	var fpsCounter = 0;
+	
+	// call this to update the fps each frame - can then be retrieved from this.fps
+	function updateFPS (){
+		fpsNow = Date.now();
+		if(fpsNow - fpsThen > 1000) {
+			this.fps = Math.floor(1/(fpsTemp/fpsCounter)*100)/100;
+			fpsThen = fpsNow;
+			fpsTemp = 0;
+			fpsCounter = 0;
+		} else {
+			fpsCounter++;
+			fpsTemp += this.dt/1000;
+		}
+	}
+	
+	// call to advance time
+	function advance (){
+		this.now = Date.now();
+		this.dt =  this.now-this.previousTime;
+		this.previousTime = this.now;
+	}
 	
 	return {
 		now: now,
 		dt: dt,
 		previousTime: previousTime,
+		fps: fps,
 		
-		// call to advance time
-		advance(){
-			this.now = Date.now();
-			this.dt =  this.now-this.previousTime;
-			this.previousTime = this.now;
-		}
-		
+		updateFPS: updateFPS,
+		advance: advance
 	}
 	
 }

@@ -41,7 +41,6 @@ var fullscreen = false;
 var canvasDefaultHeight = 600;
 var canvasDefaultWidth= 800;
 
-
 // uniform pointers
 var modelViewLoc;
 var projectionLoc;
@@ -62,10 +61,14 @@ var noclip = false;
 var canvas;
 var fullscreenButton;
 var noclipButton;
-var fpsCounter;
+var fpsElement;
 
 // time manager
 var Time;
+var then = 0;
+var now = 0;
+var fps = 0;
+var fpsCounter = 0;
 
 // World management
 var World;
@@ -77,12 +80,12 @@ window.onload = function(e){
 	canvas = document.getElementById( "gl-canvas" );
 	fullscreenButton = document.getElementById( "fullscreen-button" );
 	noclipButton = document.getElementById( "toggle-noclip-button" );
-	fpsCounter = document.getElementById( "fps" );
+	fpsElement = document.getElementById( "fps" );
 	
 	// Should be in a camera object - I will create this later
 	aspect = canvas.width/canvas.height;
 	
-	// Get WebGL context
+	// Create WebGL context
     gl = WebGLUtils.setupWebGL( canvas );
     if ( !gl ) { alert( "WebGL isn't available" ); }
 	
@@ -104,9 +107,7 @@ window.onload = function(e){
 	);
 	
 	// World generation
-	World = new WorldManager(gl);
-	chunk = new World.Chunk(vec4(0,0,0,0));
-	chunk.CreateMesh(passProgram);
+	World = new WorldManager(gl,passProgram);
 	
 	// Create pointers to uniform variables in vertex shader
 	modelViewLoc = gl.getUniformLocation(passProgram, "modelView");
@@ -125,10 +126,12 @@ window.onload = function(e){
 
 
 function render() {
+	now = Date.now();
 	
 	Time.advance(); //update dt since last frame (in miliseconds)
+	Time.updateFPS();
 	Controls.move(Time.dt); // move the player
-	if(Date.now() % 2 == 0) fps.innerHTML = "Framerate: " + Math.floor(10000/Time.dt)/10;
+	fpsElement.innerHTML = "Framerate: " + Time.fps;
 	
 	// Set up the modelview and projection matrices
 	var modelView = lookAt(Controls.eye,Controls.at,Controls.up);
@@ -138,17 +141,20 @@ function render() {
     gl.clear( gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 	
 	// Transfer modelView and projection
+	gl.useProgram(passProgram);
 	gl.uniformMatrix4fv(modelViewLoc, false, flatten(modelView));
 	gl.uniformMatrix4fv(projectionLoc, false, flatten(projection));
 	
 	// FIRE!
 	// Loop over each chunk
-	chunk.Render();
+	World.Update();
+	World.Render();
 	
 	// continue render loop
     requestAnimFrame( render );
 	
 }
+
 
 
 
