@@ -2,7 +2,6 @@
 /*
 
 TODO list:
-	Add Phong lighting in the shader (or write a new shader with simple phong lighting)
 	
 	World object
 		- Should be rendered in Chunks of appropriate size, such that reloading attr arrays is manageable
@@ -69,15 +68,13 @@ var now = 0;
 var fps = 0;
 var fpsCounter = 0;
 
-// World management
+// World management and chunk loading
 var World;
-const MAX_CHUNKS_PER_FRAME = 1; // the maximum number of chunks to load per frame
+var MAX_CHUNKS_PER_FRAME = 1; // the maximum number of chunks to load per frame
 const CHUNK_SIZE = 16; // number of blocks in each chunk
-const CHUNK_HEIGHT = 64; // number of blocks in each chunk
 
-const NUM_CHUNKS_X = 3; // number of chunks to load along the x axis
-const NUM_CHUNKS_Z = 3; // number of chunks to load along the z axis
-
+var CHUNK_LOAD_RADIUS = 16; // Square of the distance at which new chunks should load
+var CHUNK_UNLOAD_RADIUS = 64; // Square of the distance at which chunks should unload
 
 window.onload = function(e){
 	

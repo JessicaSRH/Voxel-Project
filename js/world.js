@@ -4,29 +4,21 @@
 // World namespace
 function WorldManager(gl, shaderProgram){
 	
+	// Debugging counter
+	var counter = 0;
+	
 	// WebGL context
 	var gl = gl;
 	var shaderProgram = shaderProgram;
 	var renderMode = gl.LINES;
 	
 	// Chunk management lists
-	var chunks = [];				// list of all the chunks (visibility list)
+	var chunks = {};				// list of all the chunks
 	var chunkLoadList = [];			// list of chunks that are yet to be loaded (delay to improve framerate during loading)
 	var chunkSetupList = [];		// list of chunks that are loaded but not setup (set material type, landscape generation, etc.)
 	var chunkRebuildList = [];		// list of chunks that changed since last frame (e.g. by picking)
 	var chunkUnloadList = [];		// list of chunks that need to be removed
 	var chunkRenderList = [];		// list of chunks that are rendered next frame
-	
-	var x_chunk_offset = Math.floor(Controls.eye[0]/CHUNK_SIZE) - Math.floor(NUM_CHUNKS_X/2) - (1/2);
-	var z_chunk_offset = Math.floor(Controls.eye[2]/CHUNK_SIZE) - Math.floor(NUM_CHUNKS_Z/2) - (1/2);
-	
-	var previousChunkCoord = worldCoordsToChunkCoords(Controls.eye);
-	var currentChunkCoord = worldCoordsToChunkCoords(Controls.eye);
-	
-	// initiate empty 2d chunks array
-	for(var x = 0; x < NUM_CHUNKS_X; x++) {
-		chunks[x] = [];
-	}
 	
 	function UpdateChunkLoadList(){
 		var loadCount = 0;
@@ -67,58 +59,77 @@ function WorldManager(gl, shaderProgram){
 	function UpdateChunkRenderList(){
 		
 		chunkRenderList = [];
-		var e;
 		
-		for(var x = 0; x < NUM_CHUNKS_X; x++) {
-			for(var z = 0; z < NUM_CHUNKS_Z; z++) {
-				e = chunks[x][z];
-				chunkRenderList.push(e);
+		for(var key in chunks){
+			if(!getChunk(key).isEmpty){
+				chunkRenderList.push(getChunk(key));
 			}
 		}
 	}
 	
 	function UpdateChunkVisibilityList(){
-		
-		x_chunk_offset = Math.floor(Controls.eye[0]/CHUNK_SIZE) - Math.floor(NUM_CHUNKS_X/2);
-		z_chunk_offset = Math.floor(Controls.eye[2]/CHUNK_SIZE) - Math.floor(NUM_CHUNKS_Z/2);
-		
 		var isLoaded;
 		var isSetup;
 		var needsRebuild;
 		var isVisible;
 		var e;
 		
-		for(var x = 0; x < NUM_CHUNKS_X; x++) {
-			for(var z = 0; z < NUM_CHUNKS_Z; z++) {
-				e = chunks[x][z];
-				if (e == undefined) chunks[x][z] =  new Chunk(vec2(CHUNK_SIZE*(x+x_chunk_offset),CHUNK_SIZE*(z+z_chunk_offset)));
-				e = chunks[x][z];
-				isLoaded = e.isLoaded;
-				isSetup = e.isSetup;
-				needsRebuild = e.needsRebuild;
-				
-				if(!isLoaded) chunkLoadList.push(e);
-				if(!isSetup) chunkSetupList.push(e);
-				if(isLoaded && isSetup && needsRebuild) chunkRebuildList.push(e);
-			}
+		// update chunk coordinate of the current player world coordinate
+		var currentChunkCoord = worldCoordsToChunkCoords(Controls.eye);
+		
+		// Load the current chunk if the chunk dictionary is empty
+		if (getChunk(currentChunkCoord) == undefined) {
+			addChunk(currentChunkCoord);
 		}
 		
+		forEachChunk(function(thisChunk,key,chunks){
+			// Get this chunks coordinates and the neighbouring chunk coordinates
+			var thisChunkCoord = thisChunk.chunkPosition;
+			
+			var vecToChunk;
+			var squareDistToChunk;
+			
+			// Unload chunk if it is too far away
+			vecToChunk = subtract(currentChunkCoord,thisChunkCoord);
+			squareDistToChunk = dot(vecToChunk,vecToChunk);
+			if(squareDistToChunk > CHUNK_UNLOAD_RADIUS){
+				chunkUnloadList.push(thisChunk);
+				delChunk(key);
+			} else {
+				
+				var neighbourChunkCoords = [];
+				neighbourChunkCoords.push([thisChunkCoord[0]+1,thisChunkCoord[1],thisChunkCoord[2]]);
+				neighbourChunkCoords.push([thisChunkCoord[0]-1,thisChunkCoord[1],thisChunkCoord[2]]);
+				neighbourChunkCoords.push([thisChunkCoord[0],thisChunkCoord[1]+1,thisChunkCoord[2]]);
+				neighbourChunkCoords.push([thisChunkCoord[0],thisChunkCoord[1]-1,thisChunkCoord[2]]);
+				neighbourChunkCoords.push([thisChunkCoord[0],thisChunkCoord[1],thisChunkCoord[2]+1]);
+				neighbourChunkCoords.push([thisChunkCoord[0],thisChunkCoord[1],thisChunkCoord[2]-1]);
+				
+				
+				// Load neighbouring chunks if they are close enough
+				neighbourChunkCoords.forEach(function (e,i,a) {
+					if (getChunk(e) == undefined){
+						vecToChunk = subtract(currentChunkCoord,e);
+						squareDistToChunk = dot(vecToChunk,vecToChunk);
+						if(squareDistToChunk < CHUNK_LOAD_RADIUS){
+							addChunk(e);
+						}
+					}
+				});
+				
+				
+				isLoaded = thisChunk.isLoaded;
+				isSetup = thisChunk.isSetup;
+				needsRebuild = thisChunk.needsRebuild;
+				
+				if(!isLoaded) chunkLoadList.push(thisChunk);
+				if(!isSetup) chunkSetupList.push(thisChunk);
+				if(isLoaded && isSetup && needsRebuild) chunkRebuildList.push(thisChunk);
+			}
+		});
 	}
 	
 	function Update(){
-		
-		// update chunk coordinate of the current player world coordinate
-		currentChunkCoord = worldCoordsToChunkCoords(Controls.eye);
-		
-		
-		// TODO: shift chunks array and create new chunks in freed places
-		// like, omg...
-		if ( currentChunkCoord[0] != previousChunkCoord[0] ){
-			console.log("crossed chunk border; x");
-		}
-		
-		// update chunk coordinate of the previous player world coordinate
-		previousChunkCoord = worldCoordsToChunkCoords(Controls.eye);
 		
 		UpdateChunkVisibilityList();
 		UpdateChunkLoadList();
@@ -129,36 +140,43 @@ function WorldManager(gl, shaderProgram){
 		
 	}
 	
+	// takes woorld coord (vec3 or vec4) and converts it to chunk coords (vec3) use for indexing the chunks list
 	function worldCoordsToChunkCoords(pos){
-		var result = vec4();
+		var result = vec3();
 		result[0] = Math.floor(pos[0]/CHUNK_SIZE);
 		result[1] = Math.floor(pos[1]/CHUNK_SIZE);
 		result[2] = Math.floor(pos[2]/CHUNK_SIZE);
-		result[3] = 1.0;
 		return result;
 	}
 	
-	// "enum" for block types
-	var BlockTypes = {
-		
-		BlockType_Default:	0,
-		BlockType_Grass:	1,
-		BlockType_Dirt:		2,
-		BlockType_Water:	3,
-		BlockType_Stone:	4,
-		BlockType_Wood:		5,
-		BlockType_Sand:		6,
-		
-		BlockType_NumTypes:	7,
-		
+	// retrieve block at given position
+	function getBlock(pos){
+		var chunkCoords = worldCoordsToChunkCoords(pos);
+		var chunk = getChunk(chunkCoords);
+		var internalCoord = vec3(pos[0]-chunkCoords[0]*CHUNK_SIZE, pos[1]-chunkCoords[1]*CHUNK_SIZE, pos[2]-chunkCoords[2]*CHUNK_SIZE);
+		if(chunk != undefined && chunk.isLoaded) return chunk.blocks[internalCoord[0]][internalCoord[1]][internalCoord[2]];
+		return false;
 	}
 	
-	// Block object
-	function Block() {
-		// Interface for block
-		return {
-			active : true,
-			blockType : BlockTypes.BlockType_Default
+	// function for accessing chunks
+	function getChunk(key){
+		return chunks[key];
+	}
+	
+	// function for adding new chunk
+	function addChunk(key, chunk){
+		chunks[key] = new Chunk(key);
+	}
+	
+	function delChunk(key){
+		chunks[key] = null;
+		delete(chunks[key]);
+	}
+	
+	// function for iterating over all chunks
+	function forEachChunk(callback){
+		for(var key in chunks){
+			callback(chunks[key], key, chunks);
 		}
 	}
 	
@@ -195,29 +213,33 @@ function WorldManager(gl, shaderProgram){
 		
 		
 		function CreateMesh(shaderProgram){
-			
+			//console.log(counter);
+		
 			this.needsRebuild = false;
 			
+			// reset vertex buffer arrays
+			points = [];
+			colors = [];
+			normals = [];
 			for(var i = 0; i < CHUNK_SIZE; i++) {
-				for(var j = 0; j < CHUNK_HEIGHT; j++) {
+				for(var j = 0; j < CHUNK_SIZE; j++) {
 					for(var k = 0; k < CHUNK_SIZE; k++) {
 						
-						// booleans indicating if there is an active neighbour in that direction
-						// used to prevent rendering of hidden faces
-						var nXPos = false;
-						if( i < CHUNK_SIZE-1 && blocks[i+1][j][k].active) nXPos = true;
-						var nXNeg = false;
-						if( i >  0 && blocks[i-1][j][k].active) nXNeg = true;
-						var nYPos = false;
-						if( j < CHUNK_HEIGHT-1 && blocks[i][j+1][k].active) nYPos = true;
-						var nYNeg = false;
-						if( j >  0 && blocks[i][j-1][k].active) nYNeg = true;
-						var nZPos = false;
-						if( k < CHUNK_SIZE-1 && blocks[i][j][k+1].active) nZPos = true;
-						var nZNeg = false;
-						if( k >  0 && blocks[i][j][k-1].active) nZNeg = true;
-						
-						if(blocks[i][j][k].active) createCube(vec4(i,j,k,0), nXPos, nXNeg, nYPos, nYNeg, nZPos, nZNeg);
+						if(blocks[i][j][k] != BlockTypes.BlockType_Default){
+							
+							// has neighbour boolean for each face direction; +x, -x, +y, -y, +z, -z
+							// used for culling faces if a neighbouring block exists
+							var hasNeighbour = [false, false, false, false, false, false];
+							hasNeighbour[0] = (i+1 < CHUNK_SIZE && blocks[i+1][j][k] != BlockTypes.BlockType_Default);
+							hasNeighbour[1] = (i-1 >= 0			&& blocks[i-1][j][k] != BlockTypes.BlockType_Default);
+							hasNeighbour[2] = (j+1 < CHUNK_SIZE && blocks[i][j+1][k] != BlockTypes.BlockType_Default);
+							hasNeighbour[3] = (j-1 >= 0			&& blocks[i][j-1][k] != BlockTypes.BlockType_Default);
+							hasNeighbour[4] = (k+1 < CHUNK_SIZE && blocks[i][j][k+1] != BlockTypes.BlockType_Default);
+							hasNeighbour[5] = (k-1 >= 0			&& blocks[i][j][k-1] != BlockTypes.BlockType_Default);
+							
+							createCube(vec4(i,j,k,0), hasNeighbour[0], hasNeighbour[1], hasNeighbour[2], hasNeighbour[3], hasNeighbour[4], hasNeighbour[5]);
+							
+						}
 					}
 				}
 			}
@@ -290,39 +312,38 @@ function WorldManager(gl, shaderProgram){
 		
 		function quad(a, b, c, d, blockPosition) {
 			var vertices = [
-				vec4( -0.5, -0.5,  0.5, 1.0 ),
-				vec4( -0.5,  0.5,  0.5, 1.0 ),
-				vec4(  0.5,  0.5,  0.5, 1.0 ),
-				vec4(  0.5, -0.5,  0.5, 1.0 ),
-				vec4( -0.5, -0.5, -0.5, 1.0 ),
-				vec4( -0.5,  0.5, -0.5, 1.0 ),
-				vec4(  0.5,  0.5, -0.5, 1.0 ),
-				vec4(  0.5, -0.5, -0.5, 1.0 )
+				[-0.5, -0.5,  0.5, 1.0 ],
+				[-0.5,  0.5,  0.5, 1.0 ],
+				[ 0.5,  0.5,  0.5, 1.0 ],
+				[ 0.5, -0.5,  0.5, 1.0 ],
+				[-0.5, -0.5, -0.5, 1.0 ],
+				[-0.5,  0.5, -0.5, 1.0 ],
+				[ 0.5,  0.5, -0.5, 1.0 ],
+				[ 0.5, -0.5, -0.5, 1.0 ]
 			];
 			
 			var indices = [ a, b, c, a, c, d ];
 			
-			var normal = getNormal(vertices[a],vertices[b],vertices[c]);
-			var color = vec4(0,0,0,1);
+			//var then = Date.now();
+			var color = [0,0,0,1];
+			var normal = color;
+			//var normal = getNormal(vertices[a],vertices[b],vertices[c]);
 			
-			/*
-			// Color the faces according to their normals
-			color[0] = Math.abs(normal[0]);
-			color[1] = Math.abs(normal[1]);
-			color[2] = Math.abs(normal[2]);
-			color[3] = 1;
-			
-			// Color the faces according to the chunk position
-			color[0] = Math.abs(chunkPosition[0])/20;
-			color[1] = Math.abs(chunkPosition[1])/20;
-			color[2] = Math.abs(chunkPosition[2])/20;
-			color[3] = 1;*/
-			
+			// Check if normal is facing within 90 deg towards the view
 			for ( var i = 0; i < indices.length; ++i ) {
-				points.push( add(add(vertices[indices[i]],vec4(chunkPosition[0],0,chunkPosition[1],0)), blockPosition) );
+				var pos = [];
+				pos[0] = vertices[indices[i]][0] + blockPosition[0] + chunkPosition[0]*CHUNK_SIZE;
+				pos[1] = vertices[indices[i]][1] + blockPosition[1] + chunkPosition[1]*CHUNK_SIZE;
+				pos[2] = vertices[indices[i]][2] + blockPosition[2] + chunkPosition[2]*CHUNK_SIZE;
+				pos[3] = vertices[indices[i]][3] + blockPosition[3];
+				
+				points.push( pos );
 				colors.push( color );
 				normals.push( normal );
 			}
+			//var now = Date.now();
+			counter+=(now - then);
+			
 		}
 		
 		function getNormal(p1,p2,p3){
@@ -336,21 +357,19 @@ function WorldManager(gl, shaderProgram){
 			// Generate empty blocks throughout the chunk - replace with some more interesting world gen later
 			for(var i = 0; i < CHUNK_SIZE; i++) {
 				blocks[i] = [];
-				for(var j = 0; j < CHUNK_HEIGHT; j++) {
+				for(var j = 0; j < CHUNK_SIZE; j++) {
 					blocks[i][j] = [];
 					for(var k = 0; k < CHUNK_SIZE; k++) {
-						blocks[i][j][k] = new Block();
-						if (i === 0 && j === 0 && k === 0){
-							blocks[i][j][k].active = false;
-						}
-						this.isEmpty = false;
+						blocks[i][j][k] = BlockTypes.BlockType_Grass;
 					}
 				}
 			}
+			this.isEmpty = false;
 		}
 		function Unload(){
 			this.isLoaded = false;
 			blocks = [];
+			delChunk(chunkPosition);
 		}
 		function Setup(){
 			this.isSetup = true;
@@ -377,8 +396,7 @@ function WorldManager(gl, shaderProgram){
 	return {
 		
 		renderMode: renderMode,
-		BlockTypes: BlockTypes,
-		Block : Block,
+		getBlock: getBlock,
 		Chunk : Chunk,
 		Update: Update,
 		Render: Render
@@ -386,3 +404,17 @@ function WorldManager(gl, shaderProgram){
 	}
 }
 
+// "enum" for block types
+	var BlockTypes = {
+		
+		BlockType_Default:	"0",
+		BlockType_Grass:	"1",
+		BlockType_Dirt:		"2",
+		BlockType_Water:	"3",
+		BlockType_Stone:	"4",
+		BlockType_Wood:		"5",
+		BlockType_Sand:		"6",
+		
+		BlockType_NumTypes:	7,
+		
+	}
