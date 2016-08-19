@@ -4,9 +4,20 @@
 // normal control object
 function NormalControls (init_eye, init_at, init_up) {
 	
+	// camera position
 	var eye = init_eye;
 	var at = init_at;
 	var up = init_up;
+	
+	// perspective settings
+	var aspect;
+	var fovy = 70;
+	var near = 0.01;
+	var far = 200;
+	
+	var modelView = mat4();
+	var projection = mat4();
+	
 	var moveLeftBool = false;		// should be changed by keydown even listener
 	var moveRightBool = false;		// should be changed by keydown even listener
 	var moveUpBool = false;			// should be changed by keydown even listener
@@ -15,12 +26,178 @@ function NormalControls (init_eye, init_at, init_up) {
 	var moveBackwardBool = false;	// should be changed by keydown even listener
 	var spd = 0.005; // distance per milisecond
 	var dt; // time in miliseconds - passed at every frame (dt since last frame)
+	var dir = vec3(0,0,0);
+	
+	// only this function should be called for movement
+	function move (dt){
+		this.dir = vec3(0,0,0);
+		this.dt = dt;
+		if(this.moveForwardBool){ this.moveForwardBackward(); }
+		if(this.moveBackwardBool){ this.moveForwardBackward(true); }
+		if(this.moveLeftBool){ this.moveLeftRight(); }
+		if(this.moveRightBool){ this.moveLeftRight(true); }
+		if(this.moveUpBool){ console.log("3"); }
+		if(this.moveDownBool){ console.log("4"); }
+		if (dot(this.dir,this.dir) != 0) this.update();
+		
+		// Set up the modelView and projection matrices
+		this.modelView = lookAt(this.eye,this.at,this.up);
+		this.projection = perspective( this.fovy, this.aspect, this.near, this.far )
+		
+	}
+	
+	function moveForwardBackward(backwardsBool){
+		var tempDirection;
+			
+		if (backwardsBool) 	tempDirection = subtract(this.eye,this.at);
+		else 				tempDirection = subtract(this.at,this.eye);
+		
+		tempDirection[1] = 0; // lock y-movement
+		
+		this.dir = add(this.dir,normalize(tempDirection));
+	}
+	
+	function moveUpDown(downBoolean){
+		
+	}
+	
+	function moveLeftRight(rightBool){
+		if (rightBool) 	this.dir = add(this.dir,normalize(cross(subtract(this.at,this.eye), this.up)));
+		else 			this.dir = add(this.dir,normalize(cross(subtract(this.eye,this.at), this.up)));
+	}
+	
+	function lookLeftRight(theta){
+		var r = vec3(0,1,0);
+		var rotMat = rotateAxis(theta, r);
+		this.at = subtract(this.at,this.eye);
+		this.at = mult(rotMat, vec4(this.at[0], this.at[1], this.at[2], 1));
+		this.at.pop();
+		this.at = add(this.at,this.eye);
+
+		this.up = mult(rotMat, vec4(this.up[0],this.up[1],this.up[2],0));
+		this.up.pop();
+	}
+
+	function lookUpDown(theta){
+		var r = normalize(cross(subtract(this.at,this.eye),this.up));
+		var rotMat = rotateAxis(theta, r);
+		var tempAt = this.at;
+		var tempUp = this.up;
+		tempAt = subtract(tempAt,this.eye);
+		tempAt = mult(rotMat, vec4(tempAt[0], tempAt[1], tempAt[2], 1));
+		tempAt.pop();
+		tempAt = add(tempAt,this.eye);
+
+		tempUp = mult(rotMat, vec4(tempUp[0],tempUp[1],tempUp[2],0));
+		tempUp.pop();
+
+		if(tempUp[1] > 0.00000001){ // slightly more than 0 to avoid rounding errors at the boundary
+			this.up = tempUp;
+			this.at = tempAt;
+		}
+	}
+	
+	function update(){
+		this.dir = normalize(this.dir);
+		this.eye[0] += this.dir[0]*spd*this.dt;
+		this.eye[1] += this.dir[1]*spd*this.dt;
+		this.eye[2] += this.dir[2]*spd*this.dt;
+		this.at[0] += this.dir[0]*spd*this.dt;
+		this.at[1] += this.dir[1]*spd*this.dt;
+		this.at[2] += this.dir[2]*spd*this.dt;
+	}
+	
+	function keydownCallback(event) {
+		var	key	=	String.fromCharCode(event.keyCode );
+		switch(key) {
+			case 'A':
+				Controls.moveLeftBool = true;
+				break;
+			case 'D':
+				Controls.moveRightBool = true;
+				break;
+			case 'W':
+				Controls.moveForwardBool = true;
+				break;
+			case 'S':
+				Controls.moveBackwardBool = true;
+				break;
+			case 'C':
+				Controls.moveDownBool = true;
+				break;
+			case ' ': //space key
+				if (event.keyCode == 32 && event.target == document.body) {
+					event.preventDefault();
+				}
+				Controls.moveUpBool = true;
+				break;
+		}
+	}
+	
+	function keyupCallback(event) {
+		var	key	=	String.fromCharCode(event.keyCode );
+		switch(key) {
+			case 'A':
+				Controls.moveLeftBool = false;
+				break;
+			case 'D':
+				Controls.moveRightBool = false;
+				break;
+			case 'W':
+				if(event.ctrlKey) event.preventDefault();
+				Controls.moveForwardBool = false;
+				break;
+			case 'S':
+				Controls.moveBackwardBool = false;
+				break;
+			case 'C':
+				Controls.moveDownBool = false;
+				break;
+			case ' ': //space key
+				Controls.moveUpBool = false;
+				break;
+		}
+	}
+	
+	function mousedownCallback(event) {
+		// pointer is locked
+		if (document.pointerLockElement === canvas ||
+		document.mozPointerLockElement === canvas ||
+		document.webkitPointerLockElement === canvas)
+		{
+			
+		} else {
+			// We need to lock the pointer
+			canvas.requestPointerLock =
+			canvas.requestPointerLock ||
+			canvas.mozRequestPointerLock ||
+			canvas.webkitRequestPointerLock;
+			canvas.requestPointerLock();
+		}
+	}
+	
+	function mousemoveCallback(event){
+		if(document.pointerLockElement === canvas ||
+		   document.mozPointerLockElement === canvas ||
+		   document.webkitPointerLockElement === canvas)
+		{
+			Controls.lookLeftRight(-mouseSensitivityX*event.movementX);
+			Controls.lookUpDown(-mouseSensitivityY*event.movementY);
+		}
+	}
 	
 	return {
 		
 		eye: eye,
 		at:  at,
 		up:  up,
+		dir: dir,
+		
+		aspect	:aspect,
+		fovy	:fovy,
+		near	:near,
+		far		:far,
+		
 		moveLeftBool: moveLeftBool,
 		moveRightBool: moveRightBool,
 		moveUpBool: moveUpBool,
@@ -28,157 +205,21 @@ function NormalControls (init_eye, init_at, init_up) {
 		moveForwardBool: moveForwardBool,
 		moveBackwardBool: moveBackwardBool,
 		
-		// only this function should be called for movement
-		move: function(dt){
-			this.dt = dt;
-			if(this.moveLeftBool){ this.moveLeftRight(); }
-			if(this.moveRightBool){ this.moveLeftRight(true); }
-			if(this.moveUpBool){ console.log("3"); }
-			if(this.moveDownBool){ console.log("4"); }
-			if(this.moveForwardBool){ this.moveForwardBackward(); }
-			if(this.moveBackwardBool){ this.moveForwardBackward(true); }
-		},
+		moveForwardBackward:moveForwardBackward,
+		moveUpDown:moveUpDown,
+		moveLeftRight:moveLeftRight,
+		lookLeftRight:lookLeftRight,
+		lookUpDown:lookUpDown,
 		
-		moveForwardBackward: function(backwardsBool){
-			var dir;
-			
-			if (backwardsBool){
-				dir = normalize(subtract(this.eye,this.at));
-			} else {
-				dir = normalize(subtract(this.at,this.eye));
-			}
-			this.update(dir);
-		},
+		move:move,
+		update:update,
+		keydownCallback:keydownCallback,
+		keyupCallback:keyupCallback,
+		mousedownCallback:mousedownCallback,
+		mousemoveCallback:mousemoveCallback,
 		
-		moveUpDown: function(downBoolean){
-			
-		},
-		
-		moveLeftRight: function(rightBool){
-			var dir;
-			
-			if (rightBool){
-				dir = normalize(cross(subtract(this.at,this.eye), this.up));
-			} else {
-				dir = normalize(cross(subtract(this.eye,this.at), this.up));
-			}
-			this.update(dir);
-		},
-		
-		lookLeftRight: function (theta){
-			var r = vec3(0,1,0);
-			var rotMat = rotateAxis(theta, r);
-			this.at = subtract(this.at,this.eye);
-			this.at = mult(rotMat, vec4(this.at[0], this.at[1], this.at[2], 1));
-			this.at.pop();
-			this.at = add(this.at,this.eye);
-
-			this.up = mult(rotMat, vec4(this.up[0],this.up[1],this.up[2],0));
-			this.up.pop();
-		},
-
-		lookUpDown: function (theta){
-			var r = normalize(cross(subtract(this.at,this.eye),this.up));
-			var rotMat = rotateAxis(theta, r);
-			var tempAt = this.at;
-			var tempUp = this.up;
-			tempAt = subtract(tempAt,this.eye);
-			tempAt = mult(rotMat, vec4(tempAt[0], tempAt[1], tempAt[2], 1));
-			tempAt.pop();
-			tempAt = add(tempAt,this.eye);
-
-			tempUp = mult(rotMat, vec4(tempUp[0],tempUp[1],tempUp[2],0));
-			tempUp.pop();
-
-			if(tempUp[1] > 0.00000001){ // slightly more than 0 to avoid rounding errors at the boundary
-				this.up = tempUp;
-				this.at = tempAt;
-			}
-		},
-		
-		update: function (dir){
-			dir[1] = 0; // lock the y-direction; don't lock it for no-clip
-			dir = normalize(dir);
-			this.eye[0] += dir[0]*spd*this.dt;
-			this.eye[1] += dir[1]*spd*this.dt;
-			this.eye[2] += dir[2]*spd*this.dt;
-			this.at[0] += dir[0]*spd*this.dt;
-			this.at[1] += dir[1]*spd*this.dt;
-			this.at[2] += dir[2]*spd*this.dt;
-		},
-		
-		keydownCallback: function(event) {
-			var	key	=	String.fromCharCode(event.keyCode );
-			switch(key) {
-				case 'A':
-					Controls.moveLeftBool = true;
-					break;
-				case 'D':
-					Controls.moveRightBool = true;
-					break;
-				case 'W':
-					Controls.moveForwardBool = true;
-					break;
-				case 'S':
-					Controls.moveBackwardBool = true;
-					break;
-				case ' ': //space key
-					if (event.keyCode == 32 && event.target == document.body) {
-						event.preventDefault();
-					}
-					Controls.moveUpBool = true;
-					break;
-			}
-		},
-		
-		keyupCallback: function(event) {
-			var	key	=	String.fromCharCode(event.keyCode );
-			switch(key) {
-				case 'A':
-					Controls.moveLeftBool = false;
-					break;
-				case 'D':
-					Controls.moveRightBool = false;
-					break;
-				case 'W':
-					Controls.moveForwardBool = false;
-					break;
-				case 'S':
-					Controls.moveBackwardBool = false;
-					break;
-				case ' ': //space key
-					Controls.moveUpBool = false;
-					break;
-			}
-		},
-		
-		mousedownCallback: function (event) {
-			// pointer is locked
-			if (document.pointerLockElement === canvas ||
-			document.mozPointerLockElement === canvas ||
-			document.webkitPointerLockElement === canvas)
-			{
-				
-			} else {
-				// We need to lock the pointer
-				canvas.requestPointerLock =
-				canvas.requestPointerLock ||
-				canvas.mozRequestPointerLock ||
-				canvas.webkitRequestPointerLock;
-				canvas.requestPointerLock();
-			}
-		},
-		
-		mousemoveCallback: function (event){
-			if(document.pointerLockElement === canvas ||
-			   document.mozPointerLockElement === canvas ||
-			   document.webkitPointerLockElement === canvas)
-			{
-				Controls.lookLeftRight(-mouseSensitivityX*event.movementX);
-				//console.log(Controls);
-				Controls.lookUpDown(-mouseSensitivityY*event.movementY);
-			}
-		}
+		modelView: modelView,
+		projection: projection
 		
 	}
 }
@@ -189,83 +230,81 @@ function NoclipControls (init_eye, init_at, init_up) {
 	
 	var normalControls = new NormalControls(init_eye, init_at, init_up);
 	
+	// camera position
 	var eye = init_eye;
 	var at = init_at;
 	var up = init_up;
+	
+	// perspective settings
+	var aspect;
+	var fovy = 70;
+	var near = 0.01;
+	var far = 200;
+	
 	var moveLeftBool = false;		// should be changed by keydown even listener
 	var moveRightBool = false;		// should be changed by keydown even listener
 	var moveUpBool = false;			// should be changed by keydown even listener
 	var moveDownBool = false;		// should be changed by keydown even listener
 	var moveForwardBool = false;	// should be changed by keydown even listener
 	var moveBackwardBool = false;	// should be changed by keydown even listener
-	var spd = 0.005;
-	var dt;
+	var spd = 0.01; // distance per milisecond
+	var dt; // time in miliseconds - passed at every frame (dt since last frame)
+	var dir = vec3(0,0,0);
+	
+	// move in the direction you are looking in; including up and down
+	function moveForwardBackward(backwardsBool){
+		var tempDirection;
+			
+		if (backwardsBool) 	tempDirection = subtract(this.eye,this.at);
+		else 				tempDirection = subtract(this.at,this.eye);
+		
+		this.dir = add(this.dir,normalize(tempDirection));
+	}
+	
+	// space moves up,
+	function moveUpDown(downBoolean){
+		
+	}
 	
 	return {
 		
 		eye: eye,
 		at:  at,
 		up:  up,
+		dir: normalControls.dir,
+		
+		aspect	:aspect,
+		fovy	:fovy,
+		near	:near,
+		far		:far,
+		
 		moveLeftBool: moveLeftBool,
 		moveRightBool: moveRightBool,
 		moveUpBool: moveUpBool,
 		moveDownBool: moveDownBool,
 		moveForwardBool: moveForwardBool,
 		moveBackwardBool: moveBackwardBool,
-		normalControls: normalControls,
 		
-		move: function(dt_){
-			dt = dt_;
-			this.normalControls.eye = this.eye;
-			this.normalControls.at = this.at;
-			this.normalControls.up = this.up;
-			this.normalControls.moveLeftBool = this.moveLeftBool;
-			this.normalControls.moveRightBool = this.moveRightBool;
-			this.normalControls.moveUpBool = this.moveUpBool;
-			this.normalControls.moveDownBool = this.moveDownBool;
-			this.normalControls.moveForwardBool = this.moveForwardBool;
-			this.normalControls.moveBackwardBool = this.moveBackwardBool;
-			
-			this.normalControls.update = this.update;
-			this.normalControls.move();
-			
-			this.eye = normalControls.eye;
-			this.at = normalControls.at;
-			this.up = normalControls.up;
-		},
-		moveForwardBackward: function(moveBackwardBool){
-			
-		},
-		moveUpDown: function(moveDownBool){
-			
-		},
-		moveLeftRight: function(moveRightBool){
-			
-		},
-		lookLeftRight: function(theta){
-			this.normalControls.lookLeftRight(theta);
-			this.eye = normalControls.eye;
-			this.at = normalControls.at;
-			this.up = normalControls.up;
-		},
-		lookUpDown: function(theta){
-			this.normalControls.lookUpDown(theta);
-			this.eye = normalControls.eye;
-			this.at = normalControls.at;
-			this.up = normalControls.up;
-		},
-		update: function(dir){
-			dir = normalize(dir);
-			this.eye[0] += dir[0]*spd*dt;
-			this.eye[1] += dir[1]*spd*dt;
-			this.eye[2] += dir[2]*spd*dt;
-			this.at[0] += dir[0]*spd*dt;
-			this.at[1] += dir[1]*spd*dt;
-			this.at[2] += dir[2]*spd*dt;
-		}
+		moveForwardBackward:moveForwardBackward,
+		moveUpDown:normalControls.moveUpDown,
+		moveLeftRight:normalControls.moveLeftRight,
+		lookLeftRight:normalControls.lookLeftRight,
+		lookUpDown:normalControls.lookUpDown,
 		
+		move:normalControls.move,
+		update:normalControls.update,
+		keydownCallback:normalControls.keydownCallback,
+		keyupCallback:normalControls.keyupCallback,
+		mousedownCallback:normalControls.mousedownCallback,
+		mousemoveCallback:normalControls.mousemoveCallback,
+		
+		modelView: Controls.modelView,
+		projection: Controls.projection
 	}
 }
+
+
+
 
 // function to compute rotation matrix about abitrary axis
 function rotateAxis(theta, u){
@@ -362,10 +401,13 @@ function bindCallbacks(){
 	window.onkeyup = Controls.keyupCallback;
 	
 	noclipButton.onclick = function (event){
+		var aspect = Controls.aspect;
 		if(noclip){
 			Controls = new NormalControls(Controls.eye, Controls.at, Controls.up);
+			Controls.aspect = aspect;
 		} else {
 			Controls = new NoclipControls(Controls.eye, Controls.at, Controls.up);
+			Controls.aspect = aspect;
 		}
 		noclip = !noclip;
 	}

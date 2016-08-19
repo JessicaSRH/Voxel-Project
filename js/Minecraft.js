@@ -2,8 +2,9 @@
 /*
 
 TODO list:
+	Add Phong lighting in the shader (or write a new shader with simple phong lighting)
+	
 	World object
-		- [NOPE] should support easy addition and removal of points without reloading attribute arrays
 		- Should be rendered in Chunks of appropriate size, such that reloading attr arrays is manageable
 		
 	Camera object
@@ -28,8 +29,7 @@ var points = [];
 var colors = [];
 
 // shader programs
-var program; // main shader program
-var passProgram; // pass through
+var shaderProgram; // main shader program
 
 // world settings
 var worldSizeX = 50;
@@ -44,12 +44,10 @@ var canvasDefaultWidth= 800;
 // uniform pointers
 var modelViewLoc;
 var projectionLoc;
+var eyePositionLoc;
 
 // camera related variables
-var aspect;
-var fovy = 70;
-var near = 0.01;
-var far = 200;
+var Camera;
 
 // controls
 var Controls; // object with control functions
@@ -73,7 +71,13 @@ var fpsCounter = 0;
 
 // World management
 var World;
-var chunk;
+const MAX_CHUNKS_PER_FRAME = 1; // the maximum number of chunks to load per frame
+const CHUNK_SIZE = 16; // number of blocks in each chunk
+const CHUNK_HEIGHT = 64; // number of blocks in each chunk
+
+const NUM_CHUNKS_X = 3; // number of chunks to load along the x axis
+const NUM_CHUNKS_Z = 3; // number of chunks to load along the z axis
+
 
 window.onload = function(e){
 	
@@ -84,8 +88,12 @@ window.onload = function(e){
 	renderModeButton = document.getElementById( "toggle-render-mode-button" );
 	fpsElement = document.getElementById( "fps" );
 	
+	// Initialize control objects
+	Controls = new NormalControls(vec3(0,0,0), vec3(0,0,1), vec3(0,1,0));
+	Time = new TimeManager();
+	
 	// Should be in a camera object - I will create this later
-	aspect = canvas.width/canvas.height;
+	Controls.aspect = canvas.width/canvas.height;
 	
 	// Create WebGL context
     gl = WebGLUtils.setupWebGL( canvas );
@@ -99,9 +107,9 @@ window.onload = function(e){
     gl.clearColor( 0.7, 0.9, 1.0, 1.0 ); // Background color, a nice soft blue (sky)
 	
 	// load fragment and vertex shaders
-	loadFiles(['shaders/vPass.shader', 'shaders/fPass.shader'],
+	loadFiles(['shaders/vSimplePhong.shader', 'shaders/fSimplePhong.shader'],
 		function (shaderSources){
-			self.passProgram = loadShaders (shaderSources);
+			self.shaderProgram = loadShaders (shaderSources);
 		},
 		function (url) {
 			alert('Failed to download "' + url + '"');
@@ -109,15 +117,12 @@ window.onload = function(e){
 	);
 	
 	// Load the chunk manager (world manager)
-	World = new WorldManager(gl, passProgram);
+	World = new WorldManager(gl, shaderProgram);
 	
 	// Create pointers to uniform variables in vertex shader
-	modelViewLoc = gl.getUniformLocation(passProgram, "modelView");
-	projectionLoc = gl.getUniformLocation(passProgram, "projection");
-	
-	// Initialize control object
-	Controls = new NormalControls(vec3(0,20,-2), vec3(0,20,-1), vec3(0,1,0));
-	Time = new TimeManager();
+	modelViewLoc = gl.getUniformLocation(shaderProgram, "modelView");
+	projectionLoc = gl.getUniformLocation(shaderProgram, "projection");
+	eyePositionLoc = gl.getUniformLocation(shaderProgram, "eyePosition");
 	
 	// Bind event listener callbacks
 	bindCallbacks();
@@ -128,10 +133,6 @@ window.onload = function(e){
 
 
 function render() {
-	
-	// Set up the modelView and projection matrices
-	var modelView = lookAt(Controls.eye,Controls.at,Controls.up);
-	var projection = perspective( fovy, aspect, near, far )
 	
 	// Manage time
 	Time.advance(); // update dt since last frame (in miliseconds)
@@ -145,13 +146,14 @@ function render() {
     gl.clear( gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 	
 	// Transfer modelView and projection
-	gl.useProgram(passProgram);
-	gl.uniformMatrix4fv(modelViewLoc, false, flatten(modelView));
-	gl.uniformMatrix4fv(projectionLoc, false, flatten(projection));
+	gl.useProgram(shaderProgram);
+	gl.uniformMatrix4fv(modelViewLoc, false, flatten(Controls.modelView));
+	gl.uniformMatrix4fv(projectionLoc, false, flatten(Controls.projection));
+	gl.uniform3f(eyePositionLoc, Controls.eye[0], Controls.eye[1], Controls.eye[2]);
 	
 	// FIRE! (updates the internal world state and renders everything in the render list)
 	World.Update();
-	World.Render(passProgram, World.renderMode);
+	World.Render(shaderProgram, World.renderMode);
 	
 	// continue render loop
     requestAnimFrame( render );

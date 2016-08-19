@@ -1,3 +1,5 @@
+"use strict"
+
 
 // World namespace
 function WorldManager(gl, shaderProgram){
@@ -8,38 +10,22 @@ function WorldManager(gl, shaderProgram){
 	var renderMode = gl.LINES;
 	
 	// Chunk management lists
-	var chunks = [];				// list of all the chunks
+	var chunks = [];				// list of all the chunks (visibility list)
 	var chunkLoadList = [];			// list of chunks that are yet to be loaded (delay to improve framerate during loading)
 	var chunkSetupList = [];		// list of chunks that are loaded but not setup (set material type, landscape generation, etc.)
 	var chunkRebuildList = [];		// list of chunks that changed since last frame (e.g. by picking)
 	var chunkUnloadList = [];		// list of chunks that need to be removed
-	var chunkVisibilityList = [];	// list of chunks that are currently visible
 	var chunkRenderList = [];		// list of chunks that are rendered next frame
 	
-	const MAX_CHUNKS_PER_FRAME = 10; // the maximum number of chunks to load per frame
-	const MAX_NUM_CHUNKS = 10000; //Number.MAX_SAFE_INTEGER/10; // the largest number of chunks our hashing system can handle
-	const CHUNK_SIZE = 16;
-	const P1 = 73856093; // large prime (used for hasing vec3)
-	const P2 = 19349663; // large prime (used for hasing vec3)
-	const P3 = 83492791; // large prime (used for hasing vec3)
+	var x_chunk_offset = Math.floor(Controls.eye[0]/CHUNK_SIZE) - Math.floor(NUM_CHUNKS_X/2) - (1/2);
+	var z_chunk_offset = Math.floor(Controls.eye[2]/CHUNK_SIZE) - Math.floor(NUM_CHUNKS_Z/2) - (1/2);
 	
-	const NUM_CHUNKS_X = 5;
-	const NUM_CHUNKS_Y = 6;
-	const NUM_CHUNKS_Z = 4;
+	var previousChunkCoord = worldCoordsToChunkCoords(Controls.eye);
+	var currentChunkCoord = worldCoordsToChunkCoords(Controls.eye);
 	
-	var x_chunk_offset = -3;
-	var y_chunk_offset = -2;
-	var z_chunk_offset = -1;
-	
-	// the world gen
-	for(var x = x_chunk_offset; x < NUM_CHUNKS_X+x_chunk_offset; x++) {
-		for(var y = y_chunk_offset; y < NUM_CHUNKS_Y+y_chunk_offset; y++) {
-			for(var z = z_chunk_offset; z < NUM_CHUNKS_Z+z_chunk_offset; z++) {
-				var i = worldCoordsToChunkIndexHash(vec3(x,y,z),vec3(x_chunk_offset, y_chunk_offset, z_chunk_offset));
-				if (chunks[i] != undefined) console.log(i);
-				chunks[i] = new Chunk(vec4(CHUNK_SIZE*x,CHUNK_SIZE*y,CHUNK_SIZE*z,0));
-			}
-		}
+	// initiate empty 2d chunks array
+	for(var x = 0; x < NUM_CHUNKS_X; x++) {
+		chunks[x] = [];
 	}
 	
 	function UpdateChunkLoadList(){
@@ -78,50 +64,61 @@ function WorldManager(gl, shaderProgram){
 		chunkUnloadList = [];
 	}
 	
-	function UpdateChunkVisibilityList(){
-		
-		chunkVisibilityList = [];
-			
-		chunks.forEach(function (e, i, array){
-			if (true) { // TODO: write check for visibility here
-				chunkVisibilityList.push(e); 
-			} else if (chunks[i].isLoaded){ // chunk is loaded but no longer visible
-				chunkUnloadList.push(e);
-			}
-		});
-		
-		var isLoaded;
-		var isSetup;
-		var needsRebuild;
-		
-		chunkVisibilityList.forEach(function (e, i, array){
-			isLoaded = e.isLoaded;
-			isSetup = e.isSetup;
-			needsRebuild = e.needsRebuild;
-			
-			if(!isLoaded) chunkLoadList.push(e);
-			if(!isSetup) chunkSetupList.push(e);
-			if(isLoaded && isSetup && needsRebuild) chunkRebuildList.push(e);
-		});
-	}
-	
 	function UpdateChunkRenderList(){
 		
+		chunkRenderList = [];
+		var e;
+		
+		for(var x = 0; x < NUM_CHUNKS_X; x++) {
+			for(var z = 0; z < NUM_CHUNKS_Z; z++) {
+				e = chunks[x][z];
+				chunkRenderList.push(e);
+			}
+		}
+	}
+	
+	function UpdateChunkVisibilityList(){
+		
+		x_chunk_offset = Math.floor(Controls.eye[0]/CHUNK_SIZE) - Math.floor(NUM_CHUNKS_X/2);
+		z_chunk_offset = Math.floor(Controls.eye[2]/CHUNK_SIZE) - Math.floor(NUM_CHUNKS_Z/2);
+		
 		var isLoaded;
 		var isSetup;
 		var needsRebuild;
+		var isVisible;
+		var e;
 		
-		chunkVisibilityList.forEach(function (e, i, array){
-			isLoaded = e.isLoaded;
-			isSetup = e.isSetup;
-			chunkRenderList = array;
-		});
+		for(var x = 0; x < NUM_CHUNKS_X; x++) {
+			for(var z = 0; z < NUM_CHUNKS_Z; z++) {
+				e = chunks[x][z];
+				if (e == undefined) chunks[x][z] =  new Chunk(vec2(CHUNK_SIZE*(x+x_chunk_offset),CHUNK_SIZE*(z+z_chunk_offset)));
+				e = chunks[x][z];
+				isLoaded = e.isLoaded;
+				isSetup = e.isSetup;
+				needsRebuild = e.needsRebuild;
+				
+				if(!isLoaded) chunkLoadList.push(e);
+				if(!isSetup) chunkSetupList.push(e);
+				if(isLoaded && isSetup && needsRebuild) chunkRebuildList.push(e);
+			}
+		}
+		
 	}
-	
 	
 	function Update(){
 		
-		gl.useProgram(shaderProgram);
+		// update chunk coordinate of the current player world coordinate
+		currentChunkCoord = worldCoordsToChunkCoords(Controls.eye);
+		
+		
+		// TODO: shift chunks array and create new chunks in freed places
+		// like, omg...
+		if ( currentChunkCoord[0] != previousChunkCoord[0] ){
+			console.log("crossed chunk border; x");
+		}
+		
+		// update chunk coordinate of the previous player world coordinate
+		previousChunkCoord = worldCoordsToChunkCoords(Controls.eye);
 		
 		UpdateChunkVisibilityList();
 		UpdateChunkLoadList();
@@ -132,9 +129,17 @@ function WorldManager(gl, shaderProgram){
 		
 	}
 	
+	function worldCoordsToChunkCoords(pos){
+		var result = vec4();
+		result[0] = Math.floor(pos[0]/CHUNK_SIZE);
+		result[1] = Math.floor(pos[1]/CHUNK_SIZE);
+		result[2] = Math.floor(pos[2]/CHUNK_SIZE);
+		result[3] = 1.0;
+		return result;
+	}
 	
 	// "enum" for block types
-	BlockTypes = {
+	var BlockTypes = {
 		
 		BlockType_Default:	0,
 		BlockType_Grass:	1,
@@ -157,15 +162,6 @@ function WorldManager(gl, shaderProgram){
 		}
 	}
 	
-	// Turns a position in world coordinates into a chunk index number
-	function worldCoordsToChunkIndexHash(pos, offset){
-		//return ((Math.floor(pos[0]-offset[0]) * P1) ^ (Math.floor(pos[1]-offset[1]) * P2) ^ (Math.floor(pos[2]-offset[2]) * P3)) % MAX_NUM_CHUNKS;
-		var x = pos[0]-offset[0];
-		var y = pos[1]-offset[1];
-		var z = pos[2]-offset[2];
-		return x + NUM_CHUNKS_X*y + NUM_CHUNKS_X*NUM_CHUNKS_Y*z;
-	}
-	
 	function Render(shaderProgram, mode){
 		for (var i = 0; i < chunkRenderList.length; i++){
 			chunkRenderList[i].Render(shaderProgram, mode);
@@ -175,8 +171,7 @@ function WorldManager(gl, shaderProgram){
 	
 	// Chunk object - this is where the magic happens
 	function Chunk(chunkPosition){
-		
-		var chunkPosition; // coordinates of the chunk offset (vec4)
+		var chunkPosition = chunkPosition; // coordinates of the chunk offset (vec2)
 		var blocks = [];
 		var needsRebuild = true;
 		var isLoaded = false;
@@ -193,13 +188,18 @@ function WorldManager(gl, shaderProgram){
 		var vColorLoc;
 		var colors = [];
 		
+		// Create the normals buffer
+		var nBuffer = gl.createBuffer();
+		var vNormalLoc;
+		var normals = [];
+		
 		
 		function CreateMesh(shaderProgram){
 			
 			this.needsRebuild = false;
 			
 			for(var i = 0; i < CHUNK_SIZE; i++) {
-				for(var j = 0; j < CHUNK_SIZE; j++) {
+				for(var j = 0; j < CHUNK_HEIGHT; j++) {
 					for(var k = 0; k < CHUNK_SIZE; k++) {
 						
 						// booleans indicating if there is an active neighbour in that direction
@@ -209,7 +209,7 @@ function WorldManager(gl, shaderProgram){
 						var nXNeg = false;
 						if( i >  0 && blocks[i-1][j][k].active) nXNeg = true;
 						var nYPos = false;
-						if( j < CHUNK_SIZE-1 && blocks[i][j+1][k].active) nYPos = true;
+						if( j < CHUNK_HEIGHT-1 && blocks[i][j+1][k].active) nYPos = true;
 						var nYNeg = false;
 						if( j >  0 && blocks[i][j-1][k].active) nYNeg = true;
 						var nZPos = false;
@@ -227,7 +227,7 @@ function WorldManager(gl, shaderProgram){
 			gl.bindBuffer( gl.ARRAY_BUFFER, vBuffer );
 			gl.bufferData( gl.ARRAY_BUFFER, flatten(points), gl.STATIC_DRAW );
 			
-			vPositionLoc = gl.getAttribLocation( passProgram, "vPosition" );
+			vPositionLoc = gl.getAttribLocation( shaderProgram, "vPosition" );
 			gl.vertexAttribPointer( vPositionLoc, 4, gl.FLOAT, false, 0, 0 );
 			gl.enableVertexAttribArray( vPositionLoc );
 			
@@ -236,9 +236,18 @@ function WorldManager(gl, shaderProgram){
 			gl.bindBuffer( gl.ARRAY_BUFFER, cBuffer );
 			gl.bufferData( gl.ARRAY_BUFFER, flatten(colors), gl.STATIC_DRAW );
 			
-			vColorLoc = gl.getAttribLocation( passProgram, "vColor" );
+			vColorLoc = gl.getAttribLocation( shaderProgram, "vColor" );
 			gl.vertexAttribPointer( vColorLoc, 4, gl.FLOAT, false, 0, 0 );
 			gl.enableVertexAttribArray( vColorLoc );
+			
+			// Create and configure the color buffer
+			nBuffer = gl.createBuffer();
+			gl.bindBuffer( gl.ARRAY_BUFFER, nBuffer );
+			gl.bufferData( gl.ARRAY_BUFFER, flatten(normals), gl.STATIC_DRAW );
+			
+			vNormalLoc = gl.getAttribLocation( shaderProgram, "vNormal" );
+			gl.vertexAttribPointer( vNormalLoc, 4, gl.FLOAT, false, 0, 0 );
+			gl.enableVertexAttribArray( vNormalLoc );
 			
 		}
 		
@@ -258,6 +267,11 @@ function WorldManager(gl, shaderProgram){
 			gl.bindBuffer( gl.ARRAY_BUFFER, cBuffer );
 			gl.vertexAttribPointer( vColorLoc, 4, gl.FLOAT, false, 0, 0 );
 			gl.enableVertexAttribArray( vColorLoc );
+			
+			// Re-associate this chunks normals buffer with the shader program
+			gl.bindBuffer( gl.ARRAY_BUFFER, nBuffer );
+			gl.vertexAttribPointer( vNormalLoc, 4, gl.FLOAT, false, 0, 0 );
+			gl.enableVertexAttribArray( vNormalLoc );
 			
 			// Draw the stuff
 			gl.drawArrays( mode, 0, points.length );
@@ -289,28 +303,30 @@ function WorldManager(gl, shaderProgram){
 			var indices = [ a, b, c, a, c, d ];
 			
 			var normal = getNormal(vertices[a],vertices[b],vertices[c]);
-			var color = normal;
+			var color = vec4(0,0,0,1);
 			
+			/*
 			// Color the faces according to their normals
-			color[0] = Math.abs(color[0]);
-			color[1] = Math.abs(color[1]);
-			color[2] = Math.abs(color[2]);
+			color[0] = Math.abs(normal[0]);
+			color[1] = Math.abs(normal[1]);
+			color[2] = Math.abs(normal[2]);
 			color[3] = 1;
 			
 			// Color the faces according to the chunk position
 			color[0] = Math.abs(chunkPosition[0])/20;
 			color[1] = Math.abs(chunkPosition[1])/20;
 			color[2] = Math.abs(chunkPosition[2])/20;
-			color[3] = 1;
+			color[3] = 1;*/
 			
 			for ( var i = 0; i < indices.length; ++i ) {
-				points.push( add(add(vertices[indices[i]],chunkPosition), blockPosition) );
+				points.push( add(add(vertices[indices[i]],vec4(chunkPosition[0],0,chunkPosition[1],0)), blockPosition) );
 				colors.push( color );
+				normals.push( normal );
 			}
 		}
 		
 		function getNormal(p1,p2,p3){
-			var result = cross(subtract(p1,p2),subtract(p1,p3))
+			var result = normalize(cross(subtract(p1,p2),subtract(p1,p3)));
 			result.push(0);
 			return result;
 		}
@@ -320,7 +336,7 @@ function WorldManager(gl, shaderProgram){
 			// Generate empty blocks throughout the chunk - replace with some more interesting world gen later
 			for(var i = 0; i < CHUNK_SIZE; i++) {
 				blocks[i] = [];
-				for(var j = 0; j < CHUNK_SIZE; j++) {
+				for(var j = 0; j < CHUNK_HEIGHT; j++) {
 					blocks[i][j] = [];
 					for(var k = 0; k < CHUNK_SIZE; k++) {
 						blocks[i][j][k] = new Block();
@@ -334,7 +350,7 @@ function WorldManager(gl, shaderProgram){
 		}
 		function Unload(){
 			this.isLoaded = false;
-			blocks = null;
+			blocks = [];
 		}
 		function Setup(){
 			this.isSetup = true;
@@ -343,6 +359,7 @@ function WorldManager(gl, shaderProgram){
 		
 		// interface for Chunk
 		return {
+			chunkPosition,
 			blocks : blocks,
 			needsRebuild: needsRebuild,
 			isLoaded: isLoaded,
