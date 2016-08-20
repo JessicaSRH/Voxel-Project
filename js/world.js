@@ -1,6 +1,18 @@
 "use strict"
 
 
+///TODO:
+/*
+
+Check blocks in neighbouring chunks during mesh creation!
+Triangle face merging; make one big triangle when a possible
+Frustum culling
+Perlin noise aka. landscape generation
+
+*/
+
+
+
 // World namespace
 function WorldManager(gl, shaderProgram){
 	
@@ -61,7 +73,7 @@ function WorldManager(gl, shaderProgram){
 		chunkRenderList = [];
 		
 		for(var key in chunks){
-			if(!getChunk(key).isEmpty){
+			if(getChunk(key).ShouldRender()){
 				chunkRenderList.push(getChunk(key));
 			}
 		}
@@ -77,7 +89,6 @@ function WorldManager(gl, shaderProgram){
 		// update chunk coordinate of the current player world coordinate
 		var currentChunkCoord = worldCoordsToChunkCoords(Controls.eye);
 		
-		// Load the current chunk if the chunk dictionary is empty
 		if (getChunk(currentChunkCoord) == undefined) {
 			addChunk(currentChunkCoord);
 		}
@@ -130,7 +141,6 @@ function WorldManager(gl, shaderProgram){
 	}
 	
 	function Update(){
-		
 		UpdateChunkVisibilityList();
 		UpdateChunkLoadList();
 		UpdateChunkSetupList();
@@ -191,10 +201,13 @@ function WorldManager(gl, shaderProgram){
 	function Chunk(chunkPosition){
 		var chunkPosition = chunkPosition; // coordinates of the chunk offset (vec2)
 		var blocks = [];
+		
+		// information variables
 		var needsRebuild = true;
 		var isLoaded = false;
 		var isSetup = false;
 		var isEmpty = true;
+		var fullChunkFaces = [true, true, true, true, true, true]; // booleans used to not render completely surrounded chunks
 		
 		// Create the vertex buffer
 		var vBuffer = gl.createBuffer();
@@ -221,28 +234,67 @@ function WorldManager(gl, shaderProgram){
 			points = [];
 			colors = [];
 			normals = [];
+			
+			var checkForFullChunkFace = [false, false, false, false, false, false];
+			
 			for(var i = 0; i < CHUNK_SIZE; i++) {
+				
+				if (i == 0) checkForFullChunkFace[0] = true;
+				else checkForFullChunkFace[0] = false;
+				if (i == CHUNK_SIZE-1) checkForFullChunkFace[1] = true;
+				else checkForFullChunkFace[1] = false;
+				
 				for(var j = 0; j < CHUNK_SIZE; j++) {
+					
+					if (j == 0)	checkForFullChunkFace[2] = true;
+					else checkForFullChunkFace[2] = false;
+					if (j == CHUNK_SIZE-1) checkForFullChunkFace[3] = true;
+					else checkForFullChunkFace[3] = false;
+					
 					for(var k = 0; k < CHUNK_SIZE; k++) {
 						
-						if(blocks[i][j][k] != BlockTypes.BlockType_Default){
+						if (k == 0) checkForFullChunkFace[4] = true;
+						else checkForFullChunkFace[4] = false;
+						if (k == CHUNK_SIZE-1) checkForFullChunkFace[5] = true;
+						else checkForFullChunkFace[5] = false;
+						
+						//var then = Date.now();
+						//var now = Date.now();
+						//counter += (now - then);
+						
+						// is the block empty?
+						if (blocks[i][j][k] != BlockTypes.BlockType_Default){
+							// boolean array used for culling faces; index order is:
+							// +x, -x, +y, -y, +z, -z
+							var shouldDraw = [];
 							
-							// has neighbour boolean for each face direction; +x, -x, +y, -y, +z, -z
-							// used for culling faces if a neighbouring block exists
-							var hasNeighbour = [false, false, false, false, false, false];
-							hasNeighbour[0] = (i+1 < CHUNK_SIZE && blocks[i+1][j][k] != BlockTypes.BlockType_Default);
-							hasNeighbour[1] = (i-1 >= 0			&& blocks[i-1][j][k] != BlockTypes.BlockType_Default);
-							hasNeighbour[2] = (j+1 < CHUNK_SIZE && blocks[i][j+1][k] != BlockTypes.BlockType_Default);
-							hasNeighbour[3] = (j-1 >= 0			&& blocks[i][j-1][k] != BlockTypes.BlockType_Default);
-							hasNeighbour[4] = (k+1 < CHUNK_SIZE && blocks[i][j][k+1] != BlockTypes.BlockType_Default);
-							hasNeighbour[5] = (k-1 >= 0			&& blocks[i][j][k-1] != BlockTypes.BlockType_Default);
+							// check if the block has neighbours
+							shouldDraw[0] = (i+1 >= CHUNK_SIZE	|| blocks[i+1][j][k] == BlockTypes.BlockType_Default);
+							shouldDraw[1] = (i-1 < 0			|| blocks[i-1][j][k] == BlockTypes.BlockType_Default);
+							shouldDraw[2] = (j+1 >= CHUNK_SIZE	|| blocks[i][j+1][k] == BlockTypes.BlockType_Default);
+							shouldDraw[3] = (j-1 < 0			|| blocks[i][j-1][k] == BlockTypes.BlockType_Default);
+							shouldDraw[4] = (k+1 >= CHUNK_SIZE	|| blocks[i][j][k+1] == BlockTypes.BlockType_Default);
+							shouldDraw[5] = (k-1 < 0			|| blocks[i][j][k-1] == BlockTypes.BlockType_Default);
 							
-							createCube(vec4(i,j,k,0), hasNeighbour[0], hasNeighbour[1], hasNeighbour[2], hasNeighbour[3], hasNeighbour[4], hasNeighbour[5]);
+							createCube([i,j,k], shouldDraw);
 							
+						} else {
+							// set flag indicating if the chunk face is fullChunkFaces
+							if (checkForFullChunkFace[0]) this.fullChunkFaces[0] = false;
+							if (checkForFullChunkFace[1]) this.fullChunkFaces[1] = false;
+							if (checkForFullChunkFace[2]) this.fullChunkFaces[2] = false;
+							if (checkForFullChunkFace[3]) this.fullChunkFaces[3] = false;
+							if (checkForFullChunkFace[4]) this.fullChunkFaces[4] = false;
+							if (checkForFullChunkFace[5]) this.fullChunkFaces[5] = false;
 						}
+						
+						
 					}
 				}
 			}
+			
+			// Check if we created any blocks
+			this.isEmpty = points.length == 0;
 			
 			// Create and configure the vertex buffer
 			vBuffer = gl.createBuffer();
@@ -301,33 +353,21 @@ function WorldManager(gl, shaderProgram){
 			return true;
 		}
 		
-		function createCube(blockPosition, nXPos, nXNeg, nYPos, nYNeg, nZPos, nZNeg) {
-			if (!nZPos) quad( 1, 0, 3, 2, blockPosition ); // negative z face
-			if (!nXPos) quad( 2, 3, 7, 6, blockPosition ); // positive x face
-			if (!nYNeg) quad( 3, 0, 4, 7, blockPosition ); // negative y face
-			if (!nYPos) quad( 6, 5, 1, 2, blockPosition ); // positive y face
-			if (!nZNeg) quad( 4, 5, 6, 7, blockPosition ); // positive z face
-			if (!nXNeg) quad( 5, 4, 0, 1, blockPosition ); // negative x face
+		function createCube(blockPosition, shouldDraw) {
+			if (shouldDraw[0]) quad( 2, 3, 7, 6, blockPosition, [ 1.0,  0.0,  0.0, 0.0] ); // positive x face
+			if (shouldDraw[1]) quad( 5, 4, 0, 1, blockPosition, [-1.0,  0.0,  0.0, 0.0] ); // negative x face
+			if (shouldDraw[2]) quad( 6, 5, 1, 2, blockPosition, [ 0.0,  1.0,  0.0, 0.0] ); // positive y face
+			if (shouldDraw[3]) quad( 3, 0, 4, 7, blockPosition, [ 0.0, -1.0,  0.0, 0.0] ); // negative y face
+			if (shouldDraw[4]) quad( 1, 0, 3, 2, blockPosition, [ 0.0,  0.0,  1.0, 0.0] ); // positive z face
+			if (shouldDraw[5]) quad( 4, 5, 6, 7, blockPosition, [ 0.0,  0.0, -1.0, 0.0] ); // negative z face
 		}
 		
-		function quad(a, b, c, d, blockPosition) {
-			var vertices = [
-				[-0.5, -0.5,  0.5, 1.0 ],
-				[-0.5,  0.5,  0.5, 1.0 ],
-				[ 0.5,  0.5,  0.5, 1.0 ],
-				[ 0.5, -0.5,  0.5, 1.0 ],
-				[-0.5, -0.5, -0.5, 1.0 ],
-				[-0.5,  0.5, -0.5, 1.0 ],
-				[ 0.5,  0.5, -0.5, 1.0 ],
-				[ 0.5, -0.5, -0.5, 1.0 ]
-			];
+		function quad(a, b, c, d, blockPosition, normal) {
 			
 			var indices = [ a, b, c, a, c, d ];
 			
-			//var then = Date.now();
-			var color = [0,0,0,1];
-			var normal = color;
-			//var normal = getNormal(vertices[a],vertices[b],vertices[c]);
+			var color = normal;
+			color[3] = 1;
 			
 			// Check if normal is facing within 90 deg towards the view
 			for ( var i = 0; i < indices.length; ++i ) {
@@ -335,14 +375,12 @@ function WorldManager(gl, shaderProgram){
 				pos[0] = vertices[indices[i]][0] + blockPosition[0] + chunkPosition[0]*CHUNK_SIZE;
 				pos[1] = vertices[indices[i]][1] + blockPosition[1] + chunkPosition[1]*CHUNK_SIZE;
 				pos[2] = vertices[indices[i]][2] + blockPosition[2] + chunkPosition[2]*CHUNK_SIZE;
-				pos[3] = vertices[indices[i]][3] + blockPosition[3];
+				pos[3] = vertices[indices[i]][3];
 				
 				points.push( pos );
 				colors.push( color );
 				normals.push( normal );
 			}
-			//var now = Date.now();
-			counter+=(now - then);
 			
 		}
 		
@@ -354,6 +392,15 @@ function WorldManager(gl, shaderProgram){
 		
 		function Load(){
 			this.isLoaded = true;
+		}
+		
+		function Unload(){
+			this.isLoaded = false;
+			blocks = [];
+			delChunk(chunkPosition);
+		}
+		
+		function Setup(){
 			// Generate empty blocks throughout the chunk - replace with some more interesting world gen later
 			for(var i = 0; i < CHUNK_SIZE; i++) {
 				blocks[i] = [];
@@ -361,19 +408,46 @@ function WorldManager(gl, shaderProgram){
 					blocks[i][j] = [];
 					for(var k = 0; k < CHUNK_SIZE; k++) {
 						blocks[i][j][k] = BlockTypes.BlockType_Grass;
+						/*if(
+							i == 0
+						||	j == 0
+						||	k == 0
+						||	i == CHUNK_SIZE-1
+						||	j == CHUNK_SIZE-1
+						||	k == CHUNK_SIZE-1
+						){
+							blocks[i][j][k] = BlockTypes.BlockType_Default;
+						}*/
 					}
 				}
 			}
 			this.isEmpty = false;
-		}
-		function Unload(){
-			this.isLoaded = false;
-			blocks = [];
-			delChunk(chunkPosition);
-		}
-		function Setup(){
 			this.isSetup = true;
-			// World gen here ?
+		}
+		
+		function ShouldRender(){
+			
+			var neighbourChunks = [];
+			neighbourChunks.push(getChunk([chunkPosition[0]+1,chunkPosition[1],chunkPosition[2]]));
+			neighbourChunks.push(getChunk([chunkPosition[0]-1,chunkPosition[1],chunkPosition[2]]));
+			neighbourChunks.push(getChunk([chunkPosition[0],chunkPosition[1]+1,chunkPosition[2]]));
+			neighbourChunks.push(getChunk([chunkPosition[0],chunkPosition[1]-1,chunkPosition[2]]));
+			neighbourChunks.push(getChunk([chunkPosition[0],chunkPosition[1],chunkPosition[2]+1]));
+			neighbourChunks.push(getChunk([chunkPosition[0],chunkPosition[1],chunkPosition[2]-1]));
+			
+			var shouldRender = this.isSetup && this.isLoaded && !this.isEmpty;
+			var isSurrounded = true;
+			
+			isSurrounded = isSurrounded && neighbourChunks[0] != undefined && neighbourChunks[0].fullChunkFaces[1];
+			isSurrounded = isSurrounded && neighbourChunks[1] != undefined && neighbourChunks[1].fullChunkFaces[0];
+			isSurrounded = isSurrounded && neighbourChunks[2] != undefined && neighbourChunks[2].fullChunkFaces[3];
+			isSurrounded = isSurrounded && neighbourChunks[3] != undefined && neighbourChunks[3].fullChunkFaces[2];
+			isSurrounded = isSurrounded && neighbourChunks[4] != undefined && neighbourChunks[4].fullChunkFaces[5];
+			isSurrounded = isSurrounded && neighbourChunks[5] != undefined && neighbourChunks[5].fullChunkFaces[4];
+			
+			shouldRender = shouldRender && !isSurrounded;
+			
+			return shouldRender;
 		}
 		
 		// interface for Chunk
@@ -384,6 +458,8 @@ function WorldManager(gl, shaderProgram){
 			isLoaded: isLoaded,
 			isSetup: isSetup,
 			isEmpty: isEmpty,
+			fullChunkFaces: fullChunkFaces,
+			ShouldRender: ShouldRender,
 			Render : Render,
 			CreateMesh: CreateMesh,
 			Load: Load,
@@ -404,6 +480,18 @@ function WorldManager(gl, shaderProgram){
 	}
 }
 
+// vertices for each block
+var vertices = [
+	[-0.5, -0.5,  0.5, 1.0 ], // 0 - l, b, f
+	[-0.5,  0.5,  0.5, 1.0 ], // 1 - l, t, f
+	[ 0.5,  0.5,  0.5, 1.0 ], // 2- r, t, f
+	[ 0.5, -0.5,  0.5, 1.0 ], // 3- r, b, f
+	[-0.5, -0.5, -0.5, 1.0 ], // 4- l, b, b
+	[-0.5,  0.5, -0.5, 1.0 ], // 5- l, t, b
+	[ 0.5,  0.5, -0.5, 1.0 ], // 6- r, t, b
+	[ 0.5, -0.5, -0.5, 1.0 ]  // 7 - r, b, b
+];
+
 // "enum" for block types
 	var BlockTypes = {
 		
@@ -415,6 +503,6 @@ function WorldManager(gl, shaderProgram){
 		BlockType_Wood:		"5",
 		BlockType_Sand:		"6",
 		
-		BlockType_NumTypes:	7,
+		numTypes:	7,
 		
 	}

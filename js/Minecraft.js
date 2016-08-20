@@ -73,7 +73,7 @@ var World;
 var MAX_CHUNKS_PER_FRAME = 1; // the maximum number of chunks to load per frame
 const CHUNK_SIZE = 16; // number of blocks in each chunk
 
-var CHUNK_LOAD_RADIUS = 16; // Square of the distance at which new chunks should load
+var CHUNK_LOAD_RADIUS = 9; // Square of the distance at which new chunks should load
 var CHUNK_UNLOAD_RADIUS = 64; // Square of the distance at which chunks should unload
 
 window.onload = function(e){
@@ -86,7 +86,7 @@ window.onload = function(e){
 	fpsElement = document.getElementById( "fps" );
 	
 	// Initialize control objects
-	Controls = new NormalControls(vec3(0,0,0), vec3(0,0,1), vec3(0,1,0));
+	Controls = new NormalControls(vec3(CHUNK_SIZE-1,0,CHUNK_SIZE-1), vec3(CHUNK_SIZE-1,0,CHUNK_SIZE-2), vec3(0,1,0));
 	Time = new TimeManager();
 	
 	// Should be in a camera object - I will create this later
