@@ -59,7 +59,7 @@ var canvas;
 var fullscreenButton;
 var noclipButton;
 var renderModeButton;
-var fpsElement;
+var statsElement;
 
 // time manager
 var Time;
@@ -73,7 +73,7 @@ var World;
 var MAX_CHUNKS_PER_FRAME = 1; // the maximum number of chunks to load per frame
 const CHUNK_SIZE = 16; // number of blocks in each chunk
 
-var CHUNK_LOAD_RADIUS = 9; // Square of the distance at which new chunks should load
+var CHUNK_LOAD_RADIUS = 16; // Square of the distance at which new chunks should load
 var CHUNK_UNLOAD_RADIUS = 64; // Square of the distance at which chunks should unload
 
 window.onload = function(e){
@@ -83,13 +83,15 @@ window.onload = function(e){
 	fullscreenButton = document.getElementById( "fullscreen-button" );
 	noclipButton = document.getElementById( "toggle-noclip-button" );
 	renderModeButton = document.getElementById( "toggle-render-mode-button" );
-	fpsElement = document.getElementById( "fps" );
+	statsElement = document.getElementById( "stats" );
 	
 	// Initialize control objects
 	Controls = new NormalControls(vec3(CHUNK_SIZE-1,0,CHUNK_SIZE-1), vec3(CHUNK_SIZE-1,0,CHUNK_SIZE-2), vec3(0,1,0));
 	Time = new TimeManager();
 	
 	// Should be in a camera object - I will create this later
+	canvas.width = window.innerWidth;
+	canvas.height = window.innerHeight;
 	Controls.aspect = canvas.width/canvas.height;
 	
 	// Create WebGL context
@@ -134,7 +136,10 @@ function render() {
 	// Manage time
 	Time.advance(); // update dt since last frame (in miliseconds)
 	Time.updateFPS(); // track the FPS
-	fpsElement.innerHTML = "Framerate: " + Time.fps;
+	statsElement.innerHTML = "";
+	statsElement.innerHTML += Time.fps + " fps";
+	statsElement.innerHTML += "<br/>("+Controls.eye+")";
+	statsElement.innerHTML += "<br/>"+World.numChunks+" chunks loaded";
 	
 	// Move the player
 	Controls.move(Time.dt);

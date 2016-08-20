@@ -1,12 +1,17 @@
 "use strict"
 
 
-///TODO:
+///TODO: 
 /*
 
-Check blocks in neighbouring chunks during mesh creation!
-Triangle face merging; make one big triangle when a possible
-Frustum culling
+Further optimisations that could be implemented:
+Check blocks in neighbouring chunks during mesh creation
+	- redo! only get neighbour chunk ONCE per chunk, not once per block!!!!
+
+Triangle face merging; make one big triangle when possible - probably too CPU intensive
+
+Things I should definitely do:
+Frustum culling - see function for notes
 Perlin noise aka. landscape generation
 
 */
@@ -23,6 +28,7 @@ function WorldManager(gl, shaderProgram){
 	var gl = gl;
 	var shaderProgram = shaderProgram;
 	var renderMode = gl.LINES;
+	var rebuildAll = false;
 	
 	// Chunk management lists
 	var chunks = {};				// list of all the chunks
@@ -31,8 +37,9 @@ function WorldManager(gl, shaderProgram){
 	var chunkRebuildList = [];		// list of chunks that changed since last frame (e.g. by picking)
 	var chunkUnloadList = [];		// list of chunks that need to be removed
 	var chunkRenderList = [];		// list of chunks that are rendered next frame
+	var numChunks;					// public property giving the number of chunks loaded
 	
-	function UpdateChunkLoadList(){
+	function UpdateChunkLoadList(self){
 		var loadCount = 0;
 		chunkLoadList.forEach(function (e, i, array){
 			if (loadCount < MAX_CHUNKS_PER_FRAME) {
@@ -43,43 +50,61 @@ function WorldManager(gl, shaderProgram){
 		chunkLoadList = [];
 	}
 	
-	function UpdateChunkSetupList(){
+	function UpdateChunkSetupList(self){
 		var setupCount = 0;
 		chunkSetupList.forEach(function (e, i, array){
 			if(setupCount < MAX_CHUNKS_PER_FRAME){
 				e.Setup();
 				setupCount++;
+				
+				// Rebuild all neighbours when a new chunk is setup? Horrible idea... way too slow.
+				// var neighbourChunks = [];
+				// neighbourChunks.push(chunks[chunkPosition[0]+1,chunkPosition[1],chunkPosition[2]]);
+				// neighbourChunks.push(chunks[chunkPosition[0]-1,chunkPosition[1],chunkPosition[2]]);
+				// neighbourChunks.push(chunks[chunkPosition[0],chunkPosition[1]+1,chunkPosition[2]]);
+				// neighbourChunks.push(chunks[chunkPosition[0],chunkPosition[1]-1,chunkPosition[2]]);
+				// neighbourChunks.push(chunks[chunkPosition[0],chunkPosition[1],chunkPosition[2]+1]);
+				// neighbourChunks.push(chunks[chunkPosition[0],chunkPosition[1],chunkPosition[2]-1]);
+				// if (neighbourChunks[0] != undefined) neighbourChunks[0].needsRebuild = true;
+				// if (neighbourChunks[1] != undefined) neighbourChunks[1].needsRebuild = true;
+				// if (neighbourChunks[2] != undefined) neighbourChunks[2].needsRebuild = true;
+				// if (neighbourChunks[3] != undefined) neighbourChunks[3].needsRebuild = true;
+				// if (neighbourChunks[4] != undefined) neighbourChunks[4].needsRebuild = true;
+				// if (neighbourChunks[5] != undefined) neighbourChunks[5].needsRebuild = true;
+				
 			}
 		});
+		
 		chunkSetupList = [];
 	}
 	
-	function UpdateChunkRebuildList(){
+	function UpdateChunkRebuildList(self){
 		chunkRebuildList.forEach(function (e, i, array){
 			e.CreateMesh(shaderProgram);
 		});
 		chunkRebuildList = [];
+		self.rebuildAll = false;
 	}
 	
-	function UpdateChunkUnloadList(){
+	function UpdateChunkUnloadList(self){
 		chunkUnloadList.forEach(function (e, i, array){
 			e.Unload();
 		});
 		chunkUnloadList = [];
 	}
 	
-	function UpdateChunkRenderList(){
+	function UpdateChunkRenderList(self){
 		
 		chunkRenderList = [];
 		
 		for(var key in chunks){
-			if(getChunk(key).ShouldRender()){
-				chunkRenderList.push(getChunk(key));
+			if(chunks[key].ShouldRender()){
+				chunkRenderList.push(chunks[key]);
 			}
 		}
 	}
 	
-	function UpdateChunkVisibilityList(){
+	function UpdateChunkVisibilityList(self){
 		var isLoaded;
 		var isSetup;
 		var needsRebuild;
@@ -89,12 +114,14 @@ function WorldManager(gl, shaderProgram){
 		// update chunk coordinate of the current player world coordinate
 		var currentChunkCoord = worldCoordsToChunkCoords(Controls.eye);
 		
-		if (getChunk(currentChunkCoord) == undefined) {
-			addChunk(currentChunkCoord);
+		if (chunks[currentChunkCoord] == undefined) {
+			chunks[currentChunkCoord] = new Chunk(currentChunkCoord);
 		}
 		
-		forEachChunk(function(thisChunk,key,chunks){
+		for(var key in chunks){
+			
 			// Get this chunks coordinates and the neighbouring chunk coordinates
+			var thisChunk = chunks[key];
 			var thisChunkCoord = thisChunk.chunkPosition;
 			
 			var vecToChunk;
@@ -105,7 +132,6 @@ function WorldManager(gl, shaderProgram){
 			squareDistToChunk = dot(vecToChunk,vecToChunk);
 			if(squareDistToChunk > CHUNK_UNLOAD_RADIUS){
 				chunkUnloadList.push(thisChunk);
-				delChunk(key);
 			} else {
 				
 				var neighbourChunkCoords = [];
@@ -116,14 +142,13 @@ function WorldManager(gl, shaderProgram){
 				neighbourChunkCoords.push([thisChunkCoord[0],thisChunkCoord[1],thisChunkCoord[2]+1]);
 				neighbourChunkCoords.push([thisChunkCoord[0],thisChunkCoord[1],thisChunkCoord[2]-1]);
 				
-				
 				// Load neighbouring chunks if they are close enough
 				neighbourChunkCoords.forEach(function (e,i,a) {
-					if (getChunk(e) == undefined){
+					if (chunks[e] == undefined){
 						vecToChunk = subtract(currentChunkCoord,e);
 						squareDistToChunk = dot(vecToChunk,vecToChunk);
 						if(squareDistToChunk < CHUNK_LOAD_RADIUS){
-							addChunk(e);
+							chunks[e] = new Chunk(e);
 						}
 					}
 				});
@@ -131,23 +156,23 @@ function WorldManager(gl, shaderProgram){
 				
 				isLoaded = thisChunk.isLoaded;
 				isSetup = thisChunk.isSetup;
-				needsRebuild = thisChunk.needsRebuild;
+				needsRebuild = thisChunk.needsRebuild || self.rebuildAll;
 				
 				if(!isLoaded) chunkLoadList.push(thisChunk);
 				if(!isSetup) chunkSetupList.push(thisChunk);
 				if(isLoaded && isSetup && needsRebuild) chunkRebuildList.push(thisChunk);
 			}
-		});
+		}
 	}
 	
 	function Update(){
-		UpdateChunkVisibilityList();
-		UpdateChunkLoadList();
-		UpdateChunkSetupList();
-		UpdateChunkRebuildList();
-		UpdateChunkUnloadList();
-		UpdateChunkRenderList();
-		
+		UpdateChunkVisibilityList(this);
+		UpdateChunkLoadList(this);
+		UpdateChunkSetupList(this);
+		UpdateChunkRebuildList(this);
+		UpdateChunkUnloadList(this);
+		UpdateChunkRenderList(this);
+		this.numChunks = Object.keys(chunks).length;
 	}
 	
 	// takes woorld coord (vec3 or vec4) and converts it to chunk coords (vec3) use for indexing the chunks list
@@ -162,39 +187,29 @@ function WorldManager(gl, shaderProgram){
 	// retrieve block at given position
 	function getBlock(pos){
 		var chunkCoords = worldCoordsToChunkCoords(pos);
-		var chunk = getChunk(chunkCoords);
+		var chunk = chunks[chunkCoords];
 		var internalCoord = vec3(pos[0]-chunkCoords[0]*CHUNK_SIZE, pos[1]-chunkCoords[1]*CHUNK_SIZE, pos[2]-chunkCoords[2]*CHUNK_SIZE);
 		if(chunk != undefined && chunk.isLoaded) return chunk.blocks[internalCoord[0]][internalCoord[1]][internalCoord[2]];
 		return false;
 	}
 	
-	// function for accessing chunks
-	function getChunk(key){
-		return chunks[key];
-	}
-	
-	// function for adding new chunk
-	function addChunk(key, chunk){
-		chunks[key] = new Chunk(key);
-	}
-	
-	function delChunk(key){
-		chunks[key] = null;
-		delete(chunks[key]);
-	}
-	
-	// function for iterating over all chunks
-	function forEachChunk(callback){
-		for(var key in chunks){
-			callback(chunks[key], key, chunks);
-		}
-	}
 	
 	function Render(shaderProgram, mode){
 		for (var i = 0; i < chunkRenderList.length; i++){
 			chunkRenderList[i].Render(shaderProgram, mode);
 		}
 		
+	}
+	
+	function getNeighbourChunks(chunkPosition){
+		var neighbourChunks = [];
+		neighbourChunks.push(chunks[chunkPosition[0]+1,chunkPosition[1],chunkPosition[2]]);
+		neighbourChunks.push(chunks[chunkPosition[0]-1,chunkPosition[1],chunkPosition[2]]);
+		neighbourChunks.push(chunks[chunkPosition[0],chunkPosition[1]+1,chunkPosition[2]]);
+		neighbourChunks.push(chunks[chunkPosition[0],chunkPosition[1]-1,chunkPosition[2]]);
+		neighbourChunks.push(chunks[chunkPosition[0],chunkPosition[1],chunkPosition[2]+1]);
+		neighbourChunks.push(chunks[chunkPosition[0],chunkPosition[1],chunkPosition[2]-1]);
+		return neighbourChunks;
 	}
 	
 	// Chunk object - this is where the magic happens
@@ -226,8 +241,7 @@ function WorldManager(gl, shaderProgram){
 		
 		
 		function CreateMesh(shaderProgram){
-			//console.log(counter);
-		
+			
 			this.needsRebuild = false;
 			
 			// reset vertex buffer arrays
@@ -258,23 +272,36 @@ function WorldManager(gl, shaderProgram){
 						if (k == CHUNK_SIZE-1) checkForFullChunkFace[5] = true;
 						else checkForFullChunkFace[5] = false;
 						
-						//var then = Date.now();
-						//var now = Date.now();
-						//counter += (now - then);
-						
 						// is the block empty?
 						if (blocks[i][j][k] != BlockTypes.BlockType_Default){
 							// boolean array used for culling faces; index order is:
 							// +x, -x, +y, -y, +z, -z
 							var shouldDraw = [];
 							
-							// check if the block has neighbours
+							// check if the block has neighbours within chunk
 							shouldDraw[0] = (i+1 >= CHUNK_SIZE	|| blocks[i+1][j][k] == BlockTypes.BlockType_Default);
 							shouldDraw[1] = (i-1 < 0			|| blocks[i-1][j][k] == BlockTypes.BlockType_Default);
 							shouldDraw[2] = (j+1 >= CHUNK_SIZE	|| blocks[i][j+1][k] == BlockTypes.BlockType_Default);
 							shouldDraw[3] = (j-1 < 0			|| blocks[i][j-1][k] == BlockTypes.BlockType_Default);
 							shouldDraw[4] = (k+1 >= CHUNK_SIZE	|| blocks[i][j][k+1] == BlockTypes.BlockType_Default);
 							shouldDraw[5] = (k-1 < 0			|| blocks[i][j][k-1] == BlockTypes.BlockType_Default);
+							
+							//check if blocks at the border have neighbours in neighbouring chunks - disabled since it is slow as fuck
+							/*var neighbourChunks = [];
+							neighbourChunks[0] = chunks[chunkPosition[0]+1,chunkPosition[1],chunkPosition[2]];
+							neighbourChunks[1] = chunks[chunkPosition[0]-1,chunkPosition[1],chunkPosition[2]];
+							neighbourChunks[2] = chunks[chunkPosition[0],chunkPosition[1]+1,chunkPosition[2]];
+							neighbourChunks[3] = chunks[chunkPosition[0],chunkPosition[1]-1,chunkPosition[2]];
+							neighbourChunks[4] = chunks[chunkPosition[0],chunkPosition[1],chunkPosition[2]+1];
+							neighbourChunks[5] = chunks[chunkPosition[0],chunkPosition[1],chunkPosition[2]-1];
+							
+							if (neighbourChunks[0] != undefined && neighbourChunks[0].isLoaded && neighbourChunks[0].isSetup && shouldDraw[0] && i+1 >= CHUNK_SIZE) shouldDraw[0] = neighbourChunks[0].blocks[0][j][k] 				== BlockTypes.BlockType_Default;
+							if (neighbourChunks[1] != undefined && neighbourChunks[1].isLoaded && neighbourChunks[1].isSetup && shouldDraw[1] && i-1 < 0) 			shouldDraw[1] = neighbourChunks[1].blocks[CHUNK_SIZE-1][j][k]	== BlockTypes.BlockType_Default;
+							if (neighbourChunks[2] != undefined && neighbourChunks[2].isLoaded && neighbourChunks[2].isSetup && shouldDraw[2] && j+1 >= CHUNK_SIZE) shouldDraw[2] = neighbourChunks[2].blocks[i][0][k] 				== BlockTypes.BlockType_Default;
+							if (neighbourChunks[3] != undefined && neighbourChunks[3].isLoaded && neighbourChunks[3].isSetup && shouldDraw[3] && j-1 < 0) 			shouldDraw[3] = neighbourChunks[3].blocks[i][CHUNK_SIZE-1][k]	== BlockTypes.BlockType_Default;
+							if (neighbourChunks[4] != undefined && neighbourChunks[4].isLoaded && neighbourChunks[4].isSetup && shouldDraw[4] && k+1 >= CHUNK_SIZE) shouldDraw[4] = neighbourChunks[4].blocks[i][j][0] 				== BlockTypes.BlockType_Default;
+							if (neighbourChunks[5] != undefined && neighbourChunks[5].isLoaded && neighbourChunks[5].isSetup && shouldDraw[5] && k-1 < 0) 			shouldDraw[5] = neighbourChunks[5].blocks[i][j][CHUNK_SIZE-1]	== BlockTypes.BlockType_Default;
+							*/
 							
 							createCube([i,j,k], shouldDraw);
 							
@@ -288,10 +315,14 @@ function WorldManager(gl, shaderProgram){
 							if (checkForFullChunkFace[5]) this.fullChunkFaces[5] = false;
 						}
 						
-						
 					}
 				}
 			}
+			
+			// var then = Date.now();
+			// var now = Date.now();
+			// counter += (now - then);
+			// console.log(counter);
 			
 			// Check if we created any blocks
 			this.isEmpty = points.length == 0;
@@ -326,8 +357,6 @@ function WorldManager(gl, shaderProgram){
 		}
 		
 		function Render(shaderProgram, mode){
-			
-			if (this.isEmpty) return false;
 			
 			// Make sure the correct shader is used
 			gl.useProgram(shaderProgram);
@@ -397,10 +426,12 @@ function WorldManager(gl, shaderProgram){
 		function Unload(){
 			this.isLoaded = false;
 			blocks = [];
-			delChunk(chunkPosition);
+			chunks[chunkPosition] = null;
+			delete(chunks[chunkPosition]);
 		}
 		
 		function Setup(){
+			
 			// Generate empty blocks throughout the chunk - replace with some more interesting world gen later
 			for(var i = 0; i < CHUNK_SIZE; i++) {
 				blocks[i] = [];
@@ -408,7 +439,7 @@ function WorldManager(gl, shaderProgram){
 					blocks[i][j] = [];
 					for(var k = 0; k < CHUNK_SIZE; k++) {
 						blocks[i][j][k] = BlockTypes.BlockType_Grass;
-						/*if(
+						if(
 							i == 0
 						||	j == 0
 						||	k == 0
@@ -417,26 +448,26 @@ function WorldManager(gl, shaderProgram){
 						||	k == CHUNK_SIZE-1
 						){
 							blocks[i][j][k] = BlockTypes.BlockType_Default;
-						}*/
+						}
 					}
 				}
 			}
 			this.isEmpty = false;
 			this.isSetup = true;
+			
 		}
 		
 		function ShouldRender(){
 			
-			var neighbourChunks = [];
-			neighbourChunks.push(getChunk([chunkPosition[0]+1,chunkPosition[1],chunkPosition[2]]));
-			neighbourChunks.push(getChunk([chunkPosition[0]-1,chunkPosition[1],chunkPosition[2]]));
-			neighbourChunks.push(getChunk([chunkPosition[0],chunkPosition[1]+1,chunkPosition[2]]));
-			neighbourChunks.push(getChunk([chunkPosition[0],chunkPosition[1]-1,chunkPosition[2]]));
-			neighbourChunks.push(getChunk([chunkPosition[0],chunkPosition[1],chunkPosition[2]+1]));
-			neighbourChunks.push(getChunk([chunkPosition[0],chunkPosition[1],chunkPosition[2]-1]));
-			
-			var shouldRender = this.isSetup && this.isLoaded && !this.isEmpty;
 			var isSurrounded = true;
+			
+			var neighbourChunks = [];
+			neighbourChunks.push(chunks[chunkPosition[0]+1,chunkPosition[1],chunkPosition[2]]);
+			neighbourChunks.push(chunks[chunkPosition[0]-1,chunkPosition[1],chunkPosition[2]]);
+			neighbourChunks.push(chunks[chunkPosition[0],chunkPosition[1]+1,chunkPosition[2]]);
+			neighbourChunks.push(chunks[chunkPosition[0],chunkPosition[1]-1,chunkPosition[2]]);
+			neighbourChunks.push(chunks[chunkPosition[0],chunkPosition[1],chunkPosition[2]+1]);
+			neighbourChunks.push(chunks[chunkPosition[0],chunkPosition[1],chunkPosition[2]-1]);
 			
 			isSurrounded = isSurrounded && neighbourChunks[0] != undefined && neighbourChunks[0].fullChunkFaces[1];
 			isSurrounded = isSurrounded && neighbourChunks[1] != undefined && neighbourChunks[1].fullChunkFaces[0];
@@ -445,9 +476,7 @@ function WorldManager(gl, shaderProgram){
 			isSurrounded = isSurrounded && neighbourChunks[4] != undefined && neighbourChunks[4].fullChunkFaces[5];
 			isSurrounded = isSurrounded && neighbourChunks[5] != undefined && neighbourChunks[5].fullChunkFaces[4];
 			
-			shouldRender = shouldRender && !isSurrounded;
-			
-			return shouldRender;
+			return this.isSetup && this.isLoaded && !this.isEmpty && !isSurrounded;
 		}
 		
 		// interface for Chunk
@@ -473,6 +502,8 @@ function WorldManager(gl, shaderProgram){
 		
 		renderMode: renderMode,
 		getBlock: getBlock,
+		rebuildAll: rebuildAll,
+		numChunks: numChunks,
 		Chunk : Chunk,
 		Update: Update,
 		Render: Render

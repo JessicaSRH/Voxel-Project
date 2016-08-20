@@ -1,6 +1,5 @@
 "use strict"
 
-
 // normal control object
 function NormalControls (init_eye, init_at, init_up) {
 	
@@ -113,6 +112,8 @@ function NormalControls (init_eye, init_at, init_up) {
 			case 'A':
 				Controls.moveLeftBool = true;
 				break;
+			case 'a' : // numpad 1
+				break;
 			case 'D':
 				Controls.moveRightBool = true;
 				break;
@@ -184,6 +185,23 @@ function NormalControls (init_eye, init_at, init_up) {
 			Controls.lookLeftRight(-mouseSensitivityX*event.movementX);
 			Controls.lookUpDown(-mouseSensitivityY*event.movementY);
 		}
+	}
+	
+	// frustum object (camera object basically)
+
+	function Frustum (){
+		
+		//PLAN:
+		/*
+		Step 0: Look for information online
+		Step 1: get all points of the frustum by trigonometry or something
+		Step 2: create method to compute distance from point to planes defined by the frustum points (see step 1)
+		Step 3: create sphere and cube tests (especially cube...)
+		Step 4: check visibility of every chunk in the chunk loop before adding to render list
+		Step 5: like, wow! fewer things are rendered now
+		
+		*/
+		
 	}
 	
 	return {
