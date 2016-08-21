@@ -1,31 +1,260 @@
 "use strict"
 
-// normal control object
-function NormalControls (init_eye, init_at, init_up) {
+// Camera type enum
+const CAMERA_TYPES = {
+	FRUSTUM : "0",
+	ORTHO : "1",
+}
+
+// camera object
+function Frustum(init_eye, init_at, init_up, init_fovy, init_near, init_far, init_aspect){
+	
+	// Set the camera type
+	const CAMERA_TYPE = CAMERA_TYPES.FRUSTUM;
+	
+	const SIDES = {
+		TOP:	0,
+		BOTTOM:	1,
+		LEFT:	2,
+		RIGHT:	3,
+		FAR:	4,
+		NEAR:	5
+	}
 	
 	// camera position
 	var eye = init_eye;
-	var at = init_at;
-	var up = init_up;
+	var at 	= init_at;
+	var up 	= init_up;
 	
 	// perspective settings
-	var aspect;
-	var fovy = 70;
-	var near = 0.01;
-	var far = 200;
+	var aspect 	= init_aspect;
+	var fovy 	= init_fovy;
+	var near 	= init_near;
+	var far 	= init_far;
 	
+	// main transformation matrices into this camera space
 	var modelView = mat4();
 	var projection = mat4();
 	
+	// width and height near and far frustum planes
+	var nearHeight;
+	var nearWidth ;
+	var farHeight ;
+	var farWidth  ;
+	
+	// viewing direction
+	var d;
+	
+	// right vector
+	var r;
+	
+	// frustum plane centres
+	var fc;
+	var nc;
+	
+	// frustum corners
+	var ftl;
+	var ftr;
+	var fbl;
+	var fbr;
+	var ntl;
+	var ntr;
+	var nbl;
+	var nbr;
+	
+	// planes
+	var planes = [];
+	
+	// debugging counter
+	var counter = 0;
+	
+	
+	function Update(){
+		
+		// Set up the modelView and projection matrices
+		this.modelView = lookAt(this.eye,this.at,this.up);
+		this.projection = perspective( this.fovy, this.aspect, this.near, this.far )
+		
+		// time
+		counter = 0;
+		var then = Date.now();
+		
+		// compute the sizes of the near and far planes
+		nearHeight = 2.0 * Math.tan((this.fovy*Math.PI/180) / 2.0) * near;
+		nearWidth  = nearHeight * aspect;
+		farHeight  = 2.0 * Math.tan((this.fovy*Math.PI/180) / 2.0) * far;
+		farWidth   = farHeight * aspect;
+		
+		// viewing direction
+		d = normalize(subtract(this.at,this.eye));
+		
+		// right vector
+		r = normalize(cross(this.up,d));
+		
+		// compute the centers of the near and far planes
+		fc = [this.eye[0] + d[0] * this.far , this.eye[1] + d[1]*this.far , this.eye[2] + d[2] * this.far ];
+		nc = [this.eye[0] + d[0] * this.near, this.eye[1] + d[1]*this.near, this.eye[2] + d[2] * this.near];
+		
+		// compute the corners of the frustum
+		this.ftl = [fc[0]+(this.up[0]*farHeight/2)-(r[0]*farWidth/2), fc[1]+(this.up[1]*farHeight/2)-(r[1]*farWidth/2), fc[2]+(this.up[2]*farHeight/2)-(r[2]*farWidth/2)];
+		this.ftr = [fc[0]+(this.up[0]*farHeight/2)+(r[0]*farWidth/2), fc[1]+(this.up[1]*farHeight/2)+(r[1]*farWidth/2), fc[2]+(this.up[2]*farHeight/2)+(r[2]*farWidth/2)];
+		this.fbl = [fc[0]-(this.up[0]*farHeight/2)-(r[0]*farWidth/2), fc[1]-(this.up[1]*farHeight/2)-(r[1]*farWidth/2), fc[2]-(this.up[2]*farHeight/2)-(r[2]*farWidth/2)];
+		this.fbr = [fc[0]-(this.up[0]*farHeight/2)+(r[0]*farWidth/2), fc[1]-(this.up[1]*farHeight/2)+(r[1]*farWidth/2), fc[2]-(this.up[2]*farHeight/2)+(r[2]*farWidth/2)];
+		
+		this.ntl = [nc[0]+(this.up[0]*nearHeight/2)-(r[0]*nearWidth/2), nc[1]+(this.up[1]*nearHeight/2)-(r[1]*nearWidth/2), nc[2]+(this.up[2]*nearHeight/2)-(r[2]*nearWidth/2), ];
+		this.ntr = [nc[0]+(this.up[0]*nearHeight/2)+(r[0]*nearWidth/2), nc[1]+(this.up[1]*nearHeight/2)+(r[1]*nearWidth/2), nc[2]+(this.up[2]*nearHeight/2)+(r[2]*nearWidth/2), ];
+		this.nbl = [nc[0]-(this.up[0]*nearHeight/2)-(r[0]*nearWidth/2), nc[1]-(this.up[1]*nearHeight/2)-(r[1]*nearWidth/2), nc[2]-(this.up[2]*nearHeight/2)-(r[2]*nearWidth/2), ];
+		this.nbr = [nc[0]-(this.up[0]*nearHeight/2)+(r[0]*nearWidth/2), nc[1]-(this.up[1]*nearHeight/2)+(r[1]*nearWidth/2), nc[2]-(this.up[2]*nearHeight/2)+(r[2]*nearWidth/2), ];
+		
+		planes = [];
+		planes.push(new Plane(this.ntr, this.ntl, this.ftl));
+		planes.push(new Plane(this.nbl, this.nbr, this.fbr));
+		planes.push(new Plane(this.ntl, this.nbl, this.fbl));
+		planes.push(new Plane(this.nbr, this.ntr, this.fbr));
+		planes.push(new Plane(this.ntl, this.ntr, this.nbr));
+		planes.push(new Plane(this.ftr, this.ftl, this.fbl));
+		
+		var now = Date.now();
+		counter = (now - then);
+		//console.log(counter);
+		
+	}
+	
+	function RenderCamera(gl, shaderFrustum){
+		
+		//console.log(this.ntl);
+		
+		var points = [	this.ntl, this.ntr,
+						this.ntr, this.nbr,
+						this.nbr, this.nbl,
+						this.nbl, this.ntl,
+						this.ftl, this.ftr,
+						this.ftr, this.fbr,
+						this.fbr, this.fbl,
+						this.fbl, this.ftl,
+						this.ntl, this.ftl,
+						this.nbl, this.fbl,
+						this.ntr, this.ftr,
+						this.nbr, this.fbr,
+						this.nbl, this.ftl,
+						this.ntl, this.fbl,
+						this.nbr, this.ftr,
+						this.ntr, this.fbr,
+						this.ntl, this.ftr,
+						this.ntr, this.ftl,
+						this.nbl, this.fbr,
+						this.nbr, this.fbl,
+						this.nbl, this.ntr,
+						this.nbr, this.ntl,
+						this.fbl, this.ftr,
+						this.fbr, this.ftl
+					];
+		//var points = [[0,0,0],this.ntl];
+		//var points = [[0,0,0],[-1,-1,-1]];
+		for (var i = 0; i < points.length; i++) points[i][3] = 1;
+		
+		var colors = [];
+		for (var i = 0; i < points.length; i++) colors.push([1, 0, 0, 1]);
+		
+		renderLines(gl, shaderFrustum, Camera.modelView, Camera.projection, points, colors);
+		//renderLines(gl, shaderFrustum, mat4(), mat4(), points, colors);
+		
+	}
+	
+	// pos is the lower left position, x is the extension in the x-dimension, similarly for x and y
+	// true if inside (or intesecting), false if outside
+	function CullSquareTest (p, x, y, z){
+		
+		var points = [];
+		points.push([p[0]  , p[1]  , p[2]  ]);
+		points.push([p[0]+x, p[1]  , p[2]  ]);
+		points.push([p[0]  , p[1]+y, p[2]  ]);
+		points.push([p[0]  , p[1]  , p[2]+z]);
+		points.push([p[0]+x, p[1]+y, p[2]  ]);
+		points.push([p[0]+x, p[1]  , p[2]+z]);
+		points.push([p[0]  , p[1]+y, p[2]+z]);
+		points.push([p[0]+x, p[1]+y, p[2]+z]);
+		
+		var result = true;
+		
+		for	(var i = 0; i < planes.length; i++){
+			var allPointsOutsidePlane = true;
+			
+			for(var j = 0; j < points.length; j++){
+				if (planes[i].distance(points[j]) < 0) allPointsOutsidePlane = false;
+			}
+			
+			if(allPointsOutsidePlane) result = false;
+		}
+		
+		return result;
+		
+	}
+	
+	// true if inside (or intesecting), false if outside
+	function CullPointTest (p){
+		if (planes[SIDES.TOP   ].distance(p) >= 0) return false;
+		if (planes[SIDES.BOTTOM].distance(p) >= 0) return false;
+		if (planes[SIDES.LEFT  ].distance(p) >= 0) return false;
+		if (planes[SIDES.RIGHT ].distance(p) >= 0) return false;
+		if (planes[SIDES.FAR   ].distance(p) >= 0) return false;
+		if (planes[SIDES.NEAR  ].distance(p) >= 0) return false;
+		return true;
+	}
+	
+	return {
+		
+		eye: eye,
+		at:  at,
+		up:  up,
+		
+		aspect	:aspect,
+		fovy	:fovy,
+		near	:near,
+		far		:far,
+		
+		modelView: modelView,
+		projection: projection,
+		
+		Update : Update,
+		CullSquareTest : CullSquareTest,
+		RenderCamera : RenderCamera,
+		
+		type : CAMERA_TYPE,
+		
+		ftl : ftl,
+		ftr : ftr,
+		fbl : fbl,
+		fbr : fbr,
+		ntl : ntl,
+		ntr : ntr,
+		nbl : nbl,
+		nbr : nbr
+		
+	}
+	
+}
+
+
+
+// normal control object
+function NormalControls (camera) {
+	
+	// camera object
+	var camera = camera;
+	
+	// movement booleans
 	var moveLeftBool = false;		// should be changed by keydown even listener
 	var moveRightBool = false;		// should be changed by keydown even listener
 	var moveUpBool = false;			// should be changed by keydown even listener
 	var moveDownBool = false;		// should be changed by keydown even listener
 	var moveForwardBool = false;	// should be changed by keydown even listener
 	var moveBackwardBool = false;	// should be changed by keydown even listener
+	
+	// speed and direction variables.
 	var spd = 0.005; // distance per milisecond
 	var dt; // time in miliseconds - passed at every frame (dt since last frame)
-	var dir = vec3(0,0,0);
+	var dir = vec3(0,0,0); // reset every frame; holds the direction of movement in this frame
 	
 	// only this function should be called for movement
 	function move (dt){
@@ -35,21 +264,16 @@ function NormalControls (init_eye, init_at, init_up) {
 		if(this.moveBackwardBool){ this.moveForwardBackward(true); }
 		if(this.moveLeftBool){ this.moveLeftRight(); }
 		if(this.moveRightBool){ this.moveLeftRight(true); }
-		if(this.moveUpBool){ console.log("3"); }
-		if(this.moveDownBool){ console.log("4"); }
-		if (dot(this.dir,this.dir) != 0) this.update();
-		
-		// Set up the modelView and projection matrices
-		this.modelView = lookAt(this.eye,this.at,this.up);
-		this.projection = perspective( this.fovy, this.aspect, this.near, this.far )
-		
+		if(this.moveUpBool){ console.log("3"); } // implement jumping and gravity eventually
+		if(this.moveDownBool){ console.log("4"); } // crouching I guess
+		if (dot(this.dir,this.dir) != 0) this.updateCamera();
 	}
 	
 	function moveForwardBackward(backwardsBool){
 		var tempDirection;
 			
-		if (backwardsBool) 	tempDirection = subtract(this.eye,this.at);
-		else 				tempDirection = subtract(this.at,this.eye);
+		if (backwardsBool) 	tempDirection = subtract(Camera.eye,Camera.at);
+		else 				tempDirection = subtract(Camera.at,Camera.eye);
 		
 		tempDirection[1] = 0; // lock y-movement
 		
@@ -61,49 +285,49 @@ function NormalControls (init_eye, init_at, init_up) {
 	}
 	
 	function moveLeftRight(rightBool){
-		if (rightBool) 	this.dir = add(this.dir,normalize(cross(subtract(this.at,this.eye), this.up)));
-		else 			this.dir = add(this.dir,normalize(cross(subtract(this.eye,this.at), this.up)));
+		if (rightBool) 	this.dir = add(this.dir,normalize(cross(subtract(Camera.at,Camera.eye), Camera.up)));
+		else 			this.dir = add(this.dir,normalize(cross(subtract(Camera.eye,Camera.at), Camera.up)));
 	}
 	
 	function lookLeftRight(theta){
 		var r = vec3(0,1,0);
 		var rotMat = rotateAxis(theta, r);
-		this.at = subtract(this.at,this.eye);
-		this.at = mult(rotMat, vec4(this.at[0], this.at[1], this.at[2], 1));
-		this.at.pop();
-		this.at = add(this.at,this.eye);
-
-		this.up = mult(rotMat, vec4(this.up[0],this.up[1],this.up[2],0));
-		this.up.pop();
+		Camera.at = subtract(Camera.at,Camera.eye);
+		Camera.at = mult(rotMat, vec4(Camera.at[0], Camera.at[1], Camera.at[2], 1));
+		Camera.at.pop();
+		Camera.at = add(Camera.at,Camera.eye);
+        
+		Camera.up = mult(rotMat, vec4(Camera.up[0],Camera.up[1],Camera.up[2],0));
+		Camera.up.pop();
 	}
 
 	function lookUpDown(theta){
-		var r = normalize(cross(subtract(this.at,this.eye),this.up));
+		var r = normalize(cross(subtract(Camera.at,Camera.eye),Camera.up));
 		var rotMat = rotateAxis(theta, r);
-		var tempAt = this.at;
-		var tempUp = this.up;
-		tempAt = subtract(tempAt,this.eye);
+		var tempAt = Camera.at;
+		var tempUp = Camera.up;
+		tempAt = subtract(tempAt,Camera.eye);
 		tempAt = mult(rotMat, vec4(tempAt[0], tempAt[1], tempAt[2], 1));
 		tempAt.pop();
-		tempAt = add(tempAt,this.eye);
-
+		tempAt = add(tempAt,Camera.eye);
+		
 		tempUp = mult(rotMat, vec4(tempUp[0],tempUp[1],tempUp[2],0));
 		tempUp.pop();
-
+		
 		if(tempUp[1] > 0.00000001){ // slightly more than 0 to avoid rounding errors at the boundary
-			this.up = tempUp;
-			this.at = tempAt;
+			Camera.up = tempUp;
+			Camera.at = tempAt;
 		}
 	}
 	
-	function update(){
-		this.dir = normalize(this.dir);
-		this.eye[0] += this.dir[0]*spd*this.dt;
-		this.eye[1] += this.dir[1]*spd*this.dt;
-		this.eye[2] += this.dir[2]*spd*this.dt;
-		this.at[0] += this.dir[0]*spd*this.dt;
-		this.at[1] += this.dir[1]*spd*this.dt;
-		this.at[2] += this.dir[2]*spd*this.dt;
+	function updateCamera(){
+		Camera.dir = normalize(this.dir);
+		Camera.eye[0] += this.dir[0]*spd*this.dt;
+		Camera.eye[1] += this.dir[1]*spd*this.dt;
+		Camera.eye[2] += this.dir[2]*spd*this.dt;
+		Camera.at[0] += this.dir[0]*spd*this.dt;
+		Camera.at[1] += this.dir[1]*spd*this.dt;
+		Camera.at[2] += this.dir[2]*spd*this.dt;
 	}
 	
 	function keydownCallback(event) {
@@ -187,34 +411,8 @@ function NormalControls (init_eye, init_at, init_up) {
 		}
 	}
 	
-	// frustum object (camera object basically)
-
-	function Frustum (){
-		
-		//PLAN:
-		/*
-		Step 0: Look for information online
-		Step 1: get all points of the frustum by trigonometry or something
-		Step 2: create method to compute distance from point to planes defined by the frustum points (see step 1)
-		Step 3: create sphere and cube tests (especially cube...)
-		Step 4: check visibility of every chunk in the chunk loop before adding to render list
-		Step 5: like, wow! fewer things are rendered now
-		
-		*/
-		
-	}
 	
 	return {
-		
-		eye: eye,
-		at:  at,
-		up:  up,
-		dir: dir,
-		
-		aspect	:aspect,
-		fovy	:fovy,
-		near	:near,
-		far		:far,
 		
 		moveLeftBool: moveLeftBool,
 		moveRightBool: moveRightBool,
@@ -230,15 +428,13 @@ function NormalControls (init_eye, init_at, init_up) {
 		lookUpDown:lookUpDown,
 		
 		move:move,
-		update:update,
+		updateCamera: updateCamera,
 		keydownCallback:keydownCallback,
 		keyupCallback:keyupCallback,
 		mousedownCallback:mousedownCallback,
 		mousemoveCallback:mousemoveCallback,
 		
-		modelView: modelView,
-		projection: projection
-		
+		Camera: Camera
 	}
 }
 
@@ -273,8 +469,8 @@ function NoclipControls (init_eye, init_at, init_up) {
 	function moveForwardBackward(backwardsBool){
 		var tempDirection;
 			
-		if (backwardsBool) 	tempDirection = subtract(this.eye,this.at);
-		else 				tempDirection = subtract(this.at,this.eye);
+		if (backwardsBool) 	tempDirection = subtract(Camera.eye,Camera.at);
+		else 				tempDirection = subtract(Camera.at,Camera.eye);
 		
 		this.dir = add(this.dir,normalize(tempDirection));
 	}
@@ -285,16 +481,6 @@ function NoclipControls (init_eye, init_at, init_up) {
 	}
 	
 	return {
-		
-		eye: eye,
-		at:  at,
-		up:  up,
-		dir: normalControls.dir,
-		
-		aspect	:aspect,
-		fovy	:fovy,
-		near	:near,
-		far		:far,
 		
 		moveLeftBool: moveLeftBool,
 		moveRightBool: moveRightBool,
@@ -310,14 +496,14 @@ function NoclipControls (init_eye, init_at, init_up) {
 		lookUpDown:normalControls.lookUpDown,
 		
 		move:normalControls.move,
-		update:normalControls.update,
+		updateCamera:normalControls.updateCamera,
 		keydownCallback:normalControls.keydownCallback,
 		keyupCallback:normalControls.keyupCallback,
 		mousedownCallback:normalControls.mousedownCallback,
 		mousemoveCallback:normalControls.mousemoveCallback,
 		
-		modelView: Controls.modelView,
-		projection: Controls.projection
+		Camera: normalControls.Camera
+		
 	}
 }
 
@@ -419,13 +605,10 @@ function bindCallbacks(){
 	window.onkeyup = Controls.keyupCallback;
 	
 	noclipButton.onclick = function (event){
-		var aspect = Controls.aspect;
 		if(noclip){
-			Controls = new NormalControls(Controls.eye, Controls.at, Controls.up);
-			Controls.aspect = aspect;
+			Controls = new NormalControls(Camera);
 		} else {
-			Controls = new NoclipControls(Controls.eye, Controls.at, Controls.up);
-			Controls.aspect = aspect;
+			Controls = new NoclipControls(Camera);
 		}
 		noclip = !noclip;
 	}
@@ -450,15 +633,83 @@ function bindCallbacks(){
 		}
 	}
 	
+	frustumButton.onclick = function(event){
+		if (World.frustumCam == Camera) World.frustumCam = FrustumCamera;
+		else World.frustumCam = Camera;
+	}
+	
 	function fullscreenCallback (event){
 		fullscreen = !fullscreen;
 	}
+	
 	document.onmozfullscreenchange = fullscreenCallback;
 	document.onwebkitfullscreenchange = fullscreenCallback;
 	document.fullscreenchange = fullscreenCallback;
 	
 }
 
+function renderLines(gl, shaderFrustum, modelView, projection, points, colors){
+	
+	gl.useProgram(shaderFrustum);
+	
+	var modelViewFrustumLoc = gl.getUniformLocation(shaderFrustum, "modelView");
+	var projectionFrustumLoc = gl.getUniformLocation(shaderFrustum, "projection");
+	
+	gl.uniformMatrix4fv(modelViewFrustumLoc, false, flatten(modelView));
+	gl.uniformMatrix4fv(projectionFrustumLoc, false, flatten(projection));
+	
+	// Create the vertex buffer
+	var vFBuffer = gl.createBuffer();
+	var vFPositionLoc;
+	
+	// Create the color buffer
+	var cFBuffer = gl.createBuffer();
+	var vFColorLoc;
+	
+	// Create and configure the vertex buffer
+	gl.bindBuffer( gl.ARRAY_BUFFER, vFBuffer );
+	gl.bufferData( gl.ARRAY_BUFFER, flatten(points), gl.STATIC_DRAW );
+	
+	vFPositionLoc = gl.getAttribLocation( shaderFrustum, "vPosition" );
+	gl.vertexAttribPointer( vFPositionLoc, 4, gl.FLOAT, false, 0, 0 );
+	gl.enableVertexAttribArray( vFPositionLoc );
+	
+	// Create and configure the color buffer
+	gl.bindBuffer( gl.ARRAY_BUFFER, cFBuffer );
+	gl.bufferData( gl.ARRAY_BUFFER, flatten(colors), gl.STATIC_DRAW );
+	
+	vFColorLoc = gl.getAttribLocation( shaderFrustum, "vColor" );
+	gl.vertexAttribPointer( vFColorLoc, 4, gl.FLOAT, false, 0, 0 );
+	gl.enableVertexAttribArray( vFColorLoc );
+	
+	gl.drawArrays( gl.LINES, 0, points.length );
+	
+}
+
+
+// Plane object; used for frustum culling
+function Plane(p0, p1, p2){
+	
+	var v = [p1[0]-p0[0], p1[1]-p0[1], p1[2]-p0[2]];
+	var u = [p2[0]-p0[0], p2[1]-p0[1], p2[2]-p0[2]];
+	
+	var n = normalize(cross(v, u)); // contains the A, B and C coefficients in the plane equation (Ax + By + Cz + D = 0)
+	var D = -dot(n,p0);
+	
+	function distance(p){
+		return dot(n,p) + D;
+	}
+	
+	function project(p){
+		var s = p - distance(p);
+		return [s*n[0], s*n[1], s*n[2]];
+	}
+	
+	return {
+		distance:distance,
+		project:project
+	}
+}
 
 
 

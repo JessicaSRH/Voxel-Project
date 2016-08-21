@@ -47,6 +47,7 @@ var eyePositionLoc;
 
 // camera related variables
 var Camera;
+var FrustumCamera;
 
 // controls
 var Controls; // object with control functions
@@ -59,6 +60,7 @@ var canvas;
 var fullscreenButton;
 var noclipButton;
 var renderModeButton;
+var frustumButton;
 var statsElement;
 
 // time manager
@@ -73,7 +75,7 @@ var World;
 var MAX_CHUNKS_PER_FRAME = 1; // the maximum number of chunks to load per frame
 const CHUNK_SIZE = 16; // number of blocks in each chunk
 
-var CHUNK_LOAD_RADIUS = 16; // Square of the distance at which new chunks should load
+var CHUNK_LOAD_RADIUS = 9; // Square of the distance at which new chunks should load
 var CHUNK_UNLOAD_RADIUS = 64; // Square of the distance at which chunks should unload
 
 window.onload = function(e){
@@ -83,21 +85,43 @@ window.onload = function(e){
 	fullscreenButton = document.getElementById( "fullscreen-button" );
 	noclipButton = document.getElementById( "toggle-noclip-button" );
 	renderModeButton = document.getElementById( "toggle-render-mode-button" );
+	frustumButton = document.getElementById( "lock-frustum-button" );
 	statsElement = document.getElementById( "stats" );
 	
-	// Initialize control objects
-	Controls = new NormalControls(vec3(CHUNK_SIZE-1,0,CHUNK_SIZE-1), vec3(CHUNK_SIZE-1,0,CHUNK_SIZE-2), vec3(0,1,0));
-	Time = new TimeManager();
 	
-	// Should be in a camera object - I will create this later
+	// Set the canvas width to fill the window
 	canvas.width = window.innerWidth;
 	canvas.height = window.innerHeight;
-	Controls.aspect = canvas.width/canvas.height;
+	
+	// Initial camera settings 
+	var initial_eye = [CHUNK_SIZE-1, 0, CHUNK_SIZE-1];
+	var initial_at 	= [CHUNK_SIZE-1, 0, CHUNK_SIZE-2];
+	var initial_up	= [0, 1, 0];
+	var initial_fovy 	= 70;
+	var initial_near 	= 0.01;
+	var initial_far 	= 150;
+	var initial_aspect = canvas.width/canvas.height;
+	
+	var frustum_eye = [CHUNK_SIZE-1, 0, CHUNK_SIZE-1];
+	var frustum_at 	= [CHUNK_SIZE-1, 0, CHUNK_SIZE-2];
+	var frustum_up	= [0, 1, 0];
+	var frustum_fovy 	= initial_fovy;
+	var frustum_near 	= initial_near;
+	var frustum_far 	= initial_far;
+	var frustum_aspect = canvas.width/canvas.height;
+	
+	// Initialize camera and control objects
+	Camera = new Frustum(initial_eye, initial_at, initial_up, initial_fovy, initial_near, initial_far, initial_aspect);
+	FrustumCamera = new Frustum(frustum_eye, frustum_at, frustum_up, frustum_fovy, frustum_near, frustum_far, frustum_aspect);
+	FrustumCamera.Update();
+	Controls = new NormalControls(Camera);
+	Time = new TimeManager();
 	
 	// Create WebGL context
     gl = WebGLUtils.setupWebGL( canvas );
     if ( !gl ) { alert( "WebGL isn't available" ); }
 	
+	// set up the viewport
 	gl.viewport( 0, 0, canvas.width, canvas.height );
     gl.clearColor( 0.7, 0.9, 1.0, 1.0 );
 
@@ -115,8 +139,19 @@ window.onload = function(e){
 		}
 	);
 	
+	// import shader for drawing the frustum outline
+	var shaderPass;
+	loadFiles(['shaders/vPass.shader', 'shaders/fPass.shader'],
+		function (shaderSources){
+			self.shaderPass = loadShaders (shaderSources);
+		},
+		function (url) {
+			alert('Failed to download "' + url + '"');
+		}
+	);
+	
 	// Load the chunk manager (world manager)
-	World = new WorldManager(gl, shaderProgram);
+	World = new WorldManager(gl, shaderProgram, Camera);
 	
 	// Create pointers to uniform variables in vertex shader
 	modelViewLoc = gl.getUniformLocation(shaderProgram, "modelView");
@@ -133,29 +168,44 @@ window.onload = function(e){
 
 function render() {
 	
+	//console.log(Camera.eye);
+	//console.log(FrustumCamera.eye);
+	//console.log("----------------");
+	
+	// clear the colour and depth render buffers
+    gl.clear( gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+	
 	// Manage time
 	Time.advance(); // update dt since last frame (in miliseconds)
 	Time.updateFPS(); // track the FPS
 	statsElement.innerHTML = "";
 	statsElement.innerHTML += Time.fps + " fps";
-	statsElement.innerHTML += "<br/>("+Controls.eye+")";
+	statsElement.innerHTML += "<br/>("+Camera.eye+")";
 	statsElement.innerHTML += "<br/>"+World.numChunks+" chunks loaded";
 	
 	// Move the player
 	Controls.move(Time.dt);
+	Camera.Update();
 	
-	// clear the colour and depth render buffers
-    gl.clear( gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+	// Update the frustum cam if it is not locked - if it is locked, draw it
+	if (World.frustumCam == Camera){
+		FrustumCamera.eye = [Camera.eye[0], Camera.eye[1], Camera.eye[2]];
+		FrustumCamera.up  = [Camera.up[0],  Camera.up[1],  Camera.up[2]];
+		FrustumCamera.at  = [Camera.at[0],  Camera.at[1],  Camera.at[2]];
+		FrustumCamera.Update();
+	} else {
+		FrustumCamera.RenderCamera(gl, shaderPass);
+	}
 	
 	// Transfer modelView and projection
 	gl.useProgram(shaderProgram);
-	gl.uniformMatrix4fv(modelViewLoc, false, flatten(Controls.modelView));
-	gl.uniformMatrix4fv(projectionLoc, false, flatten(Controls.projection));
-	gl.uniform3f(eyePositionLoc, Controls.eye[0], Controls.eye[1], Controls.eye[2]);
+	gl.uniformMatrix4fv(modelViewLoc, false, flatten(Camera.modelView));
+	gl.uniformMatrix4fv(projectionLoc, false, flatten(Camera.projection));
+	gl.uniform3f(eyePositionLoc, Camera.eye[0], Camera.eye[1], Camera.eye[2]);
 	
 	// FIRE! (updates the internal world state and renders everything in the render list)
 	World.Update();
-	World.Render(shaderProgram, World.renderMode);
+	//World.Render(shaderProgram, World.renderMode);
 	
 	// continue render loop
     requestAnimFrame( render );
