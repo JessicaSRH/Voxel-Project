@@ -189,7 +189,7 @@ function WorldManager(gl, shaderProgram, fCam){
 		var chunkCoords = worldCoordsToChunkCoords(pos);
 		var chunk = chunks[chunkCoords];
 		var internalCoord = vec3(pos[0]-chunkCoords[0]*CHUNK_SIZE, pos[1]-chunkCoords[1]*CHUNK_SIZE, pos[2]-chunkCoords[2]*CHUNK_SIZE);
-		if(chunk != undefined && chunk.isLoaded) return chunk.blocks[internalCoord[0]][internalCoord[1]][internalCoord[2]];
+		if(chunk != undefined && chunk.isLoaded) return chunk.voxels[internalCoord[0]][internalCoord[1]][internalCoord[2]];
 		return false;
 	}
 	
@@ -215,9 +215,9 @@ function Chunk(chunkPosition, chunks){
 	// reference to other chunks - used for neighbour checking (e.g., to see if this chunk is totally surrounded)
 	var chunks = chunks;
 	
-	// position in chunk coordintes and blocks array
+	// position in chunk coordintes and voxels array
 	var chunkPosition = chunkPosition;
-	var blocks = [];
+	var voxels = [];
 	
 	// state information variables
 	var needsRebuild = true;
@@ -240,7 +240,7 @@ function Chunk(chunkPosition, chunks){
 		
 		// Create the mesh
 		Mesh.CreateMesh = Mesher;
-		Mesh.CreateMesh(blocks, chunkPosition);
+		Mesh.CreateMesh(voxels, chunkPosition);
 		vertexAttrValues	= Mesh.vertexAttrValues;
 		vertexBuffers 		= Mesh.vertexBuffers;
 		this.isEmpty 		= Mesh.flags["isEmpty"];
@@ -268,7 +268,7 @@ function Chunk(chunkPosition, chunks){
 		this.isLoaded = true;
 		
 		// initialize block array
-		var blocks = [];
+		var voxels = [];
 		
 		// information variables
 		var needsRebuild = true;
@@ -283,7 +283,7 @@ function Chunk(chunkPosition, chunks){
 		this.isLoaded = false;
 		
 		var chunkPosition = null; // coordinates of the chunk offset (vec2)
-		var blocks = null;
+		var voxels = null;
 		
 		// information variables
 		var needsRebuild = null;
@@ -296,13 +296,13 @@ function Chunk(chunkPosition, chunks){
 	
 	function Setup(){
 		
-		// Generate empty blocks throughout the chunk - replace with some more interesting world gen later
+		// Generate empty voxels throughout the chunk - replace with some more interesting world gen later
 		for(var i = 0; i < CHUNK_SIZE; i++) {
-			blocks[i] = [];
+			voxels[i] = [];
 			for(var j = 0; j < CHUNK_SIZE; j++) {
-				blocks[i][j] = [];
+				voxels[i][j] = [];
 				for(var k = 0; k < CHUNK_SIZE; k++) {
-					blocks[i][j][k] = BLOCK_TYPES.GRASS;
+					voxels[i][j][k] = BLOCK_TYPES.GRASS;
 					/*if(
 						i == 0
 					||	j == 0
@@ -311,7 +311,7 @@ function Chunk(chunkPosition, chunks){
 					||	j == CHUNK_SIZE-1
 					||	k == CHUNK_SIZE-1
 					){
-						blocks[i][j][k] = BLOCK_TYPES.DEFAULT;
+						voxels[i][j][k] = BLOCK_TYPES.DEFAULT;
 					}*/
 				}
 			}
@@ -349,7 +349,7 @@ function Chunk(chunkPosition, chunks){
 	// interface for Chunk
 	return {
 		chunkPosition,
-		blocks : blocks,
+		voxels : voxels,
 		needsRebuild: needsRebuild,
 		isLoaded: isLoaded,
 		isSetup: isSetup,

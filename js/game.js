@@ -93,7 +93,7 @@ var fpsCounter = 0;
 // World management and chunk loading
 var World;
 var MAX_CHUNKS_PER_FRAME = 1; // the maximum number of chunks to load per frame
-const CHUNK_SIZE = 16; // number of blocks in each chunk
+const CHUNK_SIZE = 16; // number of voxels in each chunk
 
 var CHUNK_LOAD_RADIUS = 9; // Square of the distance at which new chunks should load
 var CHUNK_UNLOAD_RADIUS = 64; // Square of the distance at which chunks should unload
