@@ -1,20 +1,41 @@
 
+///
+///Copyright (c) 2016 Johnny Skaarup Redzin Hansen
+///
+///Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+///associated documentation files (the "Software"), to deal in the Software without restriction, including
+///without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+///copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to
+///the following conditions:
+///
+///The above copyright notice and this permission notice shall be included in all copies or substantial
+///portions of the Software.
+///
+///THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+///LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO
+///EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+///IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+///THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+///
+
 /*
 
 TODO list:
 	
-	World object
-		- Should be rendered in Chunks of appropriate size, such that reloading attr arrays is manageable
-		
-	Camera object
-		- should create modelView and projection matrices based on certain conditions
+	Perlin noise implementation:
+		- use for landscape generation
 	
-	FramebufferManager object
-		- Should manage a framebuffer and associated render buffers
-		- Either default or off-screen framebuffer
-		- .bind and .unbind methods activation and deactivation
+	Picking:
+		FramebufferManager object
+			- Should manage a framebuffer and associated render buffers
+			- Either default or off-screen framebuffer
+			- .bind and .unbind methods activation and deactivation
 	
-	Textures? Bump mapping and shit? Sounds cool
+	Collision detection
+		- Jumping mechanics and shit
+		- VOXEL PHYSICS? Gotta use that physics degree for something, amirite?
+	
+	Textures? Bump mapping and shit? Sounds cool I guess...
 	
 */
 
@@ -29,6 +50,7 @@ var colors = [];
 
 // shader programs
 var shaderProgram; // main shader program
+var renderMode; // render mode
 
 // world settings
 var worldSizeX = 50;
@@ -40,10 +62,8 @@ var fullscreen = false;
 var canvasDefaultHeight = 600;
 var canvasDefaultWidth= 800;
 
-// uniform pointers
-var modelViewLoc;
-var projectionLoc;
-var eyePositionLoc;
+// uniform pointer object
+var uniforms;
 
 // camera related variables
 var Camera;
@@ -88,7 +108,6 @@ window.onload = function(e){
 	frustumButton = document.getElementById( "lock-frustum-button" );
 	statsElement = document.getElementById( "stats" );
 	
-	
 	// Set the canvas width to fill the window
 	canvas.width = window.innerWidth;
 	canvas.height = window.innerHeight;
@@ -129,6 +148,9 @@ window.onload = function(e){
     gl.enable(gl.CULL_FACE);
     gl.clearColor( 0.7, 0.9, 1.0, 1.0 ); // Background color, a nice soft blue (sky)
 	
+	// set initial render mode
+	renderMode = gl.LINES;
+	
 	// load fragment and vertex shaders
 	loadFiles(['shaders/vSimplePhong.shader', 'shaders/fSimplePhong.shader'],
 		function (shaderSources){
@@ -153,20 +175,27 @@ window.onload = function(e){
 	// Load the chunk manager (world manager)
 	World = new WorldManager(gl, shaderProgram, Camera);
 	
-	// Create pointers to uniform variables in vertex shader
-	modelViewLoc = gl.getUniformLocation(shaderProgram, "modelView");
-	projectionLoc = gl.getUniformLocation(shaderProgram, "projection");
-	eyePositionLoc = gl.getUniformLocation(shaderProgram, "eyePosition");
+	
+	// Create pointers to uniform variables in the vertex shader
+	//modelViewLoc = gl.getUniformLocation(shaderProgram, "modelView");
+	//projectionLoc = gl.getUniformLocation(shaderProgram, "projection");
+	//eyePositionLoc = gl.getUniformLocation(shaderProgram, "eyePosition");
+	
+	uniforms = [
+		new vertexUniformObject("modelView", UNIFORM_TYPE.MATRIX_4),
+		new vertexUniformObject("projection", UNIFORM_TYPE.MATRIX_4),
+		new vertexUniformObject("eyePosition", UNIFORM_TYPE.FLOAT_3)
+	];
 	
 	// Bind event listener callbacks
 	bindCallbacks();
 	
 	// Initiate render loop
-	render();
+	gameLoop();
 }
 
 
-function render() {
+function gameLoop() {
 	
 	//console.log(Camera.eye);
 	//console.log(FrustumCamera.eye);
@@ -197,18 +226,16 @@ function render() {
 		FrustumCamera.RenderCamera(gl, shaderPass);
 	}
 	
-	// Transfer modelView and projection
+	// Transfer uniforms (modelView, projection and the player position)
 	gl.useProgram(shaderProgram);
-	gl.uniformMatrix4fv(modelViewLoc, false, flatten(Camera.modelView));
-	gl.uniformMatrix4fv(projectionLoc, false, flatten(Camera.projection));
-	gl.uniform3f(eyePositionLoc, Camera.eye[0], Camera.eye[1], Camera.eye[2]);
+	TransferUniforms(shaderProgram, uniforms, [Camera.modelView, Camera.projection, Camera.eye]);
 	
 	// FIRE! (updates the internal world state and renders everything in the render list)
 	World.Update();
-	//World.Render(shaderProgram, World.renderMode);
+	World.Render(renderMode);
 	
-	// continue render loop
-    requestAnimFrame( render );
+	// continue game loop
+    requestAnimFrame( gameLoop );
 	
 }
 
