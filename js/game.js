@@ -22,18 +22,26 @@
 
 TODO list:
 	
+	Chunk rendering: Only render visible chunks (occlusion culling)
+	
 	Perlin noise implementation:
 		- use for landscape generation
+		- refactor it into a composition
+	
+	Refactor controls:
+		- more modular/composition, less inheritance
+		- will make everything easier...
+		- implement different speed for normal and noclip controls
+	
+	Collision detection
+		- Jumping mechanics and shit
+		- VOXEL PHYSICS? Gotta use that physics degree for something, amirite?
 	
 	Picking:
 		FramebufferManager object
 			- Should manage a framebuffer and associated render buffers
 			- Either default or off-screen framebuffer
 			- .bind and .unbind methods activation and deactivation
-	
-	Collision detection
-		- Jumping mechanics and shit
-		- VOXEL PHYSICS? Gotta use that physics degree for something, amirite?
 	
 	Textures? Bump mapping and shit? Sounds cool I guess...
 	
@@ -50,7 +58,7 @@ var colors = [];
 
 // shader programs
 var shaderProgram; // main shader program
-var renderMode; // render mode
+var renderMode; // render mode (e.g. gl.LINES, gl.TRIANGLES)
 
 // world settings
 var worldSizeX = 50;
@@ -73,6 +81,8 @@ var FrustumCamera;
 var Controls; // object with control functions
 var mouseSensitivityX = 0.1;
 var mouseSensitivityY = 0.1;
+var normalSpeed = 0.005; // distance per milisecond
+var noclipSpeed = 0.02; // distance per second
 var noclip = false;
 
 // html elements
@@ -82,6 +92,7 @@ var noclipButton;
 var renderModeButton;
 var frustumButton;
 var statsElement;
+var devGuiElement;
 
 // time manager
 var Time;
@@ -95,8 +106,9 @@ var World;
 var MAX_CHUNKS_PER_FRAME = 1; // the maximum number of chunks to load per frame
 const CHUNK_SIZE = 32; // number of voxels in each chunk
 
-var CHUNK_LOAD_RADIUS = 32; // Square of the distance at which new chunks should load
-var CHUNK_UNLOAD_RADIUS = 45; // Square of the distance at which chunks should unload
+var CHUNK_LOAD_RADIUS = 16; // Square of the distance at which new chunks should load
+var CHUNK_UNLOAD_RADIUS = 36; // Square of the distance at which chunks should unload
+var CHUNK_FORCE_SETUP_RADIUS = 2; // Square of the distance at which chunk voxels will be forced to setup
 
 // Perlin noise generator
 var Perlin = new SimplexNoise();
@@ -113,6 +125,7 @@ window.onload = function(e){
 	renderModeButton = document.getElementById( "toggle-render-mode-button" );
 	frustumButton = document.getElementById( "lock-frustum-button" );
 	statsElement = document.getElementById( "stats" );
+	devGuiElement = document.getElementById( "dev-gui" );
 	
 	// Set the canvas width to fill the window
 	canvas.width = window.innerWidth;
@@ -124,7 +137,7 @@ window.onload = function(e){
 	var initial_up	= [0, 1, 0];
 	var initial_fovy 	= 70;
 	var initial_near 	= 0.01;
-	var initial_far 	= 200;
+	var initial_far 	= 400;
 	var initial_aspect = canvas.width/canvas.height;
 	
 	var frustum_eye = [CHUNK_SIZE-1, 0, CHUNK_SIZE-1];
@@ -155,7 +168,7 @@ window.onload = function(e){
     gl.clearColor( 0.7, 0.9, 1.0, 1.0 ); // Background color, a nice soft blue (sky)
 	
 	// set initial render mode
-	renderMode = gl.LINES;
+	renderMode = gl.TRIANGLES;
 	
 	// load fragment and vertex shaders
 	loadFiles(['shaders/vSimplePhong.shader', 'shaders/fSimplePhong.shader'],
@@ -216,7 +229,10 @@ function gameLoop() {
 	statsElement.innerHTML = "";
 	statsElement.innerHTML += Time.fps + " fps";
 	statsElement.innerHTML += "<br/>("+Camera.eye+")";
-	statsElement.innerHTML += "<br/>"+World.numChunks+" chunks loaded";
+	statsElement.innerHTML += "<br/>"+World.numChunksRendered+" chunks rendered";
+	statsElement.innerHTML += "<br/>"+World.numChunksSetup+" chunks loaded";
+	statsElement.innerHTML += "<br/>"+CHUNK_SIZE*CHUNK_SIZE*CHUNK_SIZE+" voxels per chunk";
+	statsElement.innerHTML += "<br/>"+CHUNK_SIZE*CHUNK_SIZE*CHUNK_SIZE*World.numChunksSetup+" voxels loaded";
 	
 	// Move the player
 	Controls.move(Time.dt);

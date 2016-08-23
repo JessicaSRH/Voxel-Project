@@ -96,9 +96,9 @@ function Frustum(init_eye, init_at, init_up, init_fovy, init_near, init_far, ini
 		this.projection = perspective( this.fovy, this.aspect, this.near, this.far )
 		
 		// compute the sizes of the near and far planes
-		nearHeight = 2.0 * Math.tan((this.fovy*Math.PI/180) / 2.0) * this.near*1.05; // adding 5% to avoid weird boundary bug
+		nearHeight = 2.0 * Math.tan((this.fovy*Math.PI/180) / 2.0) * this.near*1.00; // adding 5% to avoid weird boundary bug
 		nearWidth  = nearHeight * aspect;
-		farHeight  = 2.0 * Math.tan((this.fovy*Math.PI/180) / 2.0) * this.far*1.05; // adding 5% to avoid weird boundary bug
+		farHeight  = 2.0 * Math.tan((this.fovy*Math.PI/180) / 2.0) * this.far*1.00; // adding 5% to avoid weird boundary bug
 		farWidth   = farHeight * aspect;
 		
 		// viewing direction
@@ -340,21 +340,20 @@ function NormalControls (camera) {
 	
 	function updateCamera(){
 		Camera.dir = normalize(this.dir);
-		Camera.eye[0] += this.dir[0]*spd*this.dt;
-		Camera.eye[1] += this.dir[1]*spd*this.dt;
-		Camera.eye[2] += this.dir[2]*spd*this.dt;
-		Camera.at[0] += this.dir[0]*spd*this.dt;
-		Camera.at[1] += this.dir[1]*spd*this.dt;
-		Camera.at[2] += this.dir[2]*spd*this.dt;
+		Camera.eye[0] += this.dir[0]*this.speed*this.dt;
+		Camera.eye[1] += this.dir[1]*this.speed*this.dt;
+		Camera.eye[2] += this.dir[2]*this.speed*this.dt;
+		Camera.at[0] += this.dir[0]*this.speed*this.dt;
+		Camera.at[1] += this.dir[1]*this.speed*this.dt;
+		Camera.at[2] += this.dir[2]*this.speed*this.dt;
 	}
 	
 	function keydownCallback(event) {
 		var	key	=	String.fromCharCode(event.keyCode );
+		
 		switch(key) {
 			case 'A':
 				Controls.moveLeftBool = true;
-				break;
-			case 'a' : // numpad 1
 				break;
 			case 'D':
 				Controls.moveRightBool = true;
@@ -373,6 +372,11 @@ function NormalControls (camera) {
 					event.preventDefault();
 				}
 				Controls.moveUpBool = true;
+				break;
+			case 'r' : // F3
+				event.preventDefault();
+				if (devGuiElement.style.visibility == "visible") devGuiElement.style.visibility = "hidden";
+				else devGuiElement.style.visibility = "visible";
 				break;
 		}
 	}
@@ -452,6 +456,8 @@ function NormalControls (camera) {
 		mousedownCallback:mousedownCallback,
 		mousemoveCallback:mousemoveCallback,
 		
+		speed:spd,
+		
 		Camera: Camera
 	}
 }
@@ -462,24 +468,12 @@ function NoclipControls (init_eye, init_at, init_up) {
 	
 	var normalControls = new NormalControls(init_eye, init_at, init_up);
 	
-	// camera position
-	var eye = init_eye;
-	var at = init_at;
-	var up = init_up;
-	
-	// perspective settings
-	var aspect;
-	var fovy = 70;
-	var near = 0.01;
-	var far = 200;
-	
 	var moveLeftBool = false;		// should be changed by keydown even listener
 	var moveRightBool = false;		// should be changed by keydown even listener
 	var moveUpBool = false;			// should be changed by keydown even listener
 	var moveDownBool = false;		// should be changed by keydown even listener
 	var moveForwardBool = false;	// should be changed by keydown even listener
 	var moveBackwardBool = false;	// should be changed by keydown even listener
-	var spd = 0.01; // distance per milisecond
 	var dt; // time in miliseconds - passed at every frame (dt since last frame)
 	var dir = vec3(0,0,0);
 	
@@ -519,6 +513,8 @@ function NoclipControls (init_eye, init_at, init_up) {
 		keyupCallback:normalControls.keyupCallback,
 		mousedownCallback:normalControls.mousedownCallback,
 		mousemoveCallback:normalControls.mousemoveCallback,
+		
+		speed : normalControls.speed,
 		
 		Camera: normalControls.Camera
 		

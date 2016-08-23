@@ -37,7 +37,8 @@ function WorldManager(gl, shaderProgram, fCam){
 	var chunkRebuildList = [];		// list of chunks that changed since last frame (e.g. by picking)
 	var chunkUnloadList = [];		// list of chunks that need to be removed
 	var chunkRenderList = [];		// list of chunks that are rendered next frame
-	var numChunks;					// public property giving the number of chunks loaded
+	var numChunksSetup = 0;				// public property giving the number of chunks setup
+	var numChunksRendered = 0;			// public property giving the number of chunks rendered
 	
 	// frustum camera
 	var frustumCam = fCam;
@@ -60,21 +61,8 @@ function WorldManager(gl, shaderProgram, fCam){
 		chunkSetupList.forEach(function (e, i, array){
 			if(setupCount < MAX_CHUNKS_PER_FRAME){
 				e.Setup();
-				setupCount++;
-				
-				// Rebuild all neighbours when a new chunk is setup? Horrible idea... way too slow.
-				//var neighbourChunks = [];
-				//if (neighbourChunks[0] != undefined) neighbourChunks.push(chunks[chunkPosition[0]+1,chunkPosition[1],chunkPosition[2]]);
-				//if (neighbourChunks[1] != undefined) neighbourChunks.push(chunks[chunkPosition[0]-1,chunkPosition[1],chunkPosition[2]]);
-				//if (neighbourChunks[2] != undefined) neighbourChunks.push(chunks[chunkPosition[0],chunkPosition[1]+1,chunkPosition[2]]);
-				//if (neighbourChunks[3] != undefined) neighbourChunks.push(chunks[chunkPosition[0],chunkPosition[1]-1,chunkPosition[2]]);
-				//if (neighbourChunks[4] != undefined) neighbourChunks.push(chunks[chunkPosition[0],chunkPosition[1],chunkPosition[2]+1]);
-				//if (neighbourChunks[5] != undefined) neighbourChunks.push(chunks[chunkPosition[0],chunkPosition[1],chunkPosition[2]-1]);
-				//
-				//neighbourChunks.forEach(function (e,i,a){
-				//	e.needsRebuild = true;
-				//});
-				
+				setupCount++; // total number of chunks loaded THIS FRAME
+				self.numChunksSetup++; // total number of chunks loaded IN TOTAL
 			}
 		});
 		
@@ -95,13 +83,12 @@ function WorldManager(gl, shaderProgram, fCam){
 			chunks[key] = null;
 			delete(chunks[key]);
 			e.Unload();
-			
+			self.numChunksSetup--;
 		});
 		chunkUnloadList = [];
 	}
 	
 	function Render(renderMode){
-		
 		for (var i = 0; i < chunkRenderList.length; i++){
 			chunkRenderList[i].Render(shaderProgram, renderMode);
 		}
@@ -115,10 +102,10 @@ function WorldManager(gl, shaderProgram, fCam){
 		var e;
 		
 		// update chunk coordinate of the current player world coordinate
-		var currentChunkCoord = worldCoordsToChunkCoords(Camera.eye);
+		var currentChunkCoord = worldCoordsToChunkCoords(self.frustumCam.eye);
 		
-		if (chunks[currentChunkCoord] == undefined) {
-			chunks[currentChunkCoord] = new Chunk(currentChunkCoord, chunks);
+		if (chunks[currentChunkCoord] == undefined && self.numChunksSetup == 0) {
+			chunkLoadList.push(currentChunkCoord);
 		}
 		
 		for(var key in chunks){
@@ -137,36 +124,73 @@ function WorldManager(gl, shaderProgram, fCam){
 				chunkUnloadList.push(thisChunk);
 			} else {
 				
-				//if (!thisChunk.fullChunkFaces[3]){
-					var neighbourChunkCoords = [];
-					if(chunks[thisChunkCoord[0]+1,thisChunkCoord[1],thisChunkCoord[2]] == undefined) neighbourChunkCoords[0] = ([thisChunkCoord[0]+1,thisChunkCoord[1],thisChunkCoord[2]]);
-					if(chunks[thisChunkCoord[0]-1,thisChunkCoord[1],thisChunkCoord[2]] == undefined) neighbourChunkCoords[1] = ([thisChunkCoord[0]-1,thisChunkCoord[1],thisChunkCoord[2]]);
-					if(chunks[thisChunkCoord[0],thisChunkCoord[1]+1,thisChunkCoord[2]] == undefined) neighbourChunkCoords[2] = ([thisChunkCoord[0],thisChunkCoord[1]+1,thisChunkCoord[2]]);
-					if(chunks[thisChunkCoord[0],thisChunkCoord[1],thisChunkCoord[2]+1] == undefined) neighbourChunkCoords[4] = ([thisChunkCoord[0],thisChunkCoord[1],thisChunkCoord[2]+1]);
-					if(chunks[thisChunkCoord[0],thisChunkCoord[1],thisChunkCoord[2]-1] == undefined) neighbourChunkCoords[5] = ([thisChunkCoord[0],thisChunkCoord[1],thisChunkCoord[2]-1]);
-					
-					// Only go down if we can't go out! Cheap way to only load the top layer...
-					if(neighbourChunkCoords.length == 0 || (thisChunkCoord[4] != undefined && chunks[thisChunkCoord].isEmpty)) neighbourChunkCoords.push([thisChunkCoord[0],thisChunkCoord[1]-1,thisChunkCoord[2]]);
-					//else console.log(neighbourChunkCoords.length);
-					
-					// Load neighbouring chunks if they are close enough
-					neighbourChunkCoords.forEach(function (e,i,a) {
-						if (chunks[e] == undefined){
-							vecToChunk = subtract(currentChunkCoord,e);
-							squareDistToChunk = dot(vecToChunk,vecToChunk);
-							if(squareDistToChunk < CHUNK_LOAD_RADIUS){
-								chunkLoadList.push(e);
-							}
+				var neighbourChunkCoords = [];
+				neighbourChunkCoords[0] = [thisChunkCoord[0]+1,thisChunkCoord[1],thisChunkCoord[2]];
+				neighbourChunkCoords[1] = [thisChunkCoord[0]-1,thisChunkCoord[1],thisChunkCoord[2]];
+				neighbourChunkCoords[2] = [thisChunkCoord[0],thisChunkCoord[1]+1,thisChunkCoord[2]];
+				neighbourChunkCoords[3] = [thisChunkCoord[0],thisChunkCoord[1]-1,thisChunkCoord[2]];
+				neighbourChunkCoords[4] = [thisChunkCoord[0],thisChunkCoord[1],thisChunkCoord[2]+1];
+				neighbourChunkCoords[5] = [thisChunkCoord[0],thisChunkCoord[1],thisChunkCoord[2]-1];
+				
+				//else console.log(neighbourChunkCoords.length);
+				
+				// Load neighbouring chunks if they are close enough
+				neighbourChunkCoords.forEach(function (e,i,a) {
+					if (chunks[e] == undefined){
+						vecToChunk = subtract(currentChunkCoord,e);
+						squareDistToChunk = dot(vecToChunk,vecToChunk);
+						if(	   squareDistToChunk < CHUNK_LOAD_RADIUS
+							&& (i != 3 || (thisChunk.isSetup && !thisChunk.fullChunkFaces[3]))
+						){
+							chunkLoadList.push(e);
 						}
-					});
-				//}
+					}
+				});
+				
 				
 				isSetup = thisChunk.isSetup;
 				needsRebuild = thisChunk.needsRebuild || self.rebuildAll;
 				
-				if(chunks[key].ShouldRender()) chunkRenderList.push(chunks[key]);
-				if(!isSetup) chunkSetupList.push(thisChunk);
+				
+				
+				// Check if the chunk should be setup
+				/*
+					Current strat:					Only setup a chunk if at least one of the neighbour chunks in the direction of player	isSetup and does not have a full chunk face towards the chunk in consideration
+					Maybe use less strict stratt?:	Only setup a chunk if at least one of the neighbour chunks 								isSetup and does not have a full chunk face towards the chunk in consideration
+				*/
+				
+				if(!isSetup){
+					
+					var shouldSetup = false;
+					var directionsToCheck = subtract(thisChunkCoord, currentChunkCoord); 										// the directions in which neighbours should be considered
+					var nCoord = [thisChunkCoord[0], thisChunkCoord[1], thisChunkCoord[2] ]; 									// variable holding the coordinate of the neighbour that is currently being checked
+					for (var i = 0; i < 3; i++){ 																				// iterate over each of the directions to consider
+						if (directionsToCheck[i] != 0) { 																		// if this direction is not zero (this occurs if the chunk is axis-aligned with the camera)
+							directionsToCheck[i] = directionsToCheck[i]/Math.abs(directionsToCheck[i]);							// get + or - 1 in along the axis we are currently checking
+							nCoord[i] -= directionsToCheck[i];																	// add the + or - 1 to the neighbour we are considering
+							var faceToCheck = i*2;																				// get the index of the face to check
+							if (directionsToCheck[i] < 0) faceToCheck += 1;														// add one if the direction is negative (since the index of the negative direction is 1 higher)
+							if (chunks[nCoord] != undefined && chunks[nCoord].isSetup && !chunks[nCoord].fullChunkFaces[faceToCheck]) shouldSetup = true;
+																																// if the neighbour chunk is setup, and does not have a full chunk face facing towards the new chunk, setup the new chunk
+							nCoord[i] += directionsToCheck[i];																	// set the neighbour coordinate back to be ready for the next axis (i)
+						}
+					}
+					var shouldForceSetup = dot(directionsToCheck, directionsToCheck) < CHUNK_FORCE_SETUP_RADIUS;
+					if(shouldSetup || shouldForceSetup) chunkSetupList.push(thisChunk);
+					
+					
+					
+					//counter = 0;					// Timer code, for debugging
+					//var then = Date.now();
+					//var now = Date.now();
+					//counter += (now - then);
+					
+					
+				}
+				
+				
 				if(isSetup && needsRebuild) chunkRebuildList.push(thisChunk);
+				if(chunks[key].ShouldRender()) chunkRenderList.push(chunks[key]);
 			}
 		}
 	}
@@ -178,7 +202,8 @@ function WorldManager(gl, shaderProgram, fCam){
 		UpdateChunkSetupList(this);
 		UpdateChunkRebuildList(this);
 		UpdateChunkUnloadList(this);
-		this.numChunks = Object.keys(chunks).length;
+		
+		this.numChunksRendered = chunkRenderList.length;
 		
 	}
 	
@@ -196,7 +221,8 @@ function WorldManager(gl, shaderProgram, fCam){
 		
 		getBlock: getBlock,
 		rebuildAll: rebuildAll,
-		numChunks: numChunks,
+		numChunksSetup: numChunksSetup,
+		numChunksRendered: numChunksRendered,
 		frustumCam : frustumCam,
 		Render: Render, 
 		Mesher: Mesher,
@@ -288,39 +314,18 @@ function Chunk(chunkPosition, chunks){
 					
 					
 					//voxels[i][j][k] = (Perlin.noise3d(i,j,k) < 0.8) ? BLOCK_TYPES.DEFAULT : BLOCK_TYPES.GRASS; // Cool space world thingy
-					//console.log(Perlin.noise3d(i,k));
-					//console.log(j);
 					
 					x = i+chunkPosition[0]*CHUNK_SIZE;
 					y = j+chunkPosition[1]*CHUNK_SIZE;
 					z = k+chunkPosition[2]*CHUNK_SIZE;
 					
-					//counter = 0;
-					var then = Date.now();
-					voxels[i][j][k] = (Perlin.noise(x/100,z/100)*20 < y) ? BLOCK_TYPES.DEFAULT : BLOCK_TYPES.GRASS; // Cool space world thingy
-					var now = Date.now();
-					counter += (now - then);
+					voxels[i][j][k] = (Perlin.noise(x/200,z/200)*50 < y) ? BLOCK_TYPES.DEFAULT : BLOCK_TYPES.GRASS; // Cool valley ish terrain thingy
 					
-					
-					//console.log(Perlin.noise(i,k));
-					/*if(
-						i == 0
-					||	j == 0
-					||	k == 0
-					||	i == CHUNK_SIZE-1
-					||	j == CHUNK_SIZE-1
-					||	k == CHUNK_SIZE-1
-					){
-						voxels[i][j][k] = BLOCK_TYPES.DEFAULT;
-					}*/
 				}
 			}
 		}
 		this.isEmpty = false;
 		this.isSetup = true;
-		
-		//console.log(counter);
-		
 		
 	}
 	
