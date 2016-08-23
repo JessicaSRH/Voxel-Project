@@ -13,6 +13,11 @@ varying vec3 L, E, N;
 varying vec4 fPosition;
 varying float attenuation;
 
+varying vec3 diffuseProduct;
+varying vec3 specularProduct;
+varying vec3 ambientProduct;
+varying float matShininess;
+
 uniform mat4 modelView;
 uniform mat4 projection;
 uniform vec3 eyePosition;
@@ -24,12 +29,30 @@ void main() {
 	fPosition = vPosition;
 	
 	vec4 lightPosition;
-	//lightPosition = vec4(30,25,30,1.0); // light position in world space
-	lightPosition = vec4(eyePosition,1.0); // set light position to eye
+	lightPosition = vec4(30,25,30,1.0); // light position in world space
+	//lightPosition = vec4(eyePosition,1.0); // set light position to eye
+	
+	mat3 matCoeffs = mat3( // material coefficients
+		0.1, 0.3, 0.1,
+		0.1, 0.9, 0.1,
+		0.1, 0.3, 0.1
+	);
+	
+	mat3 lCoeffs = mat3( // light coefficients
+		0.2, 0.2, 0.2,
+		0.1, 0.3, 0.1,
+		0.1, 0.3, 0.1
+	);
+	
+	diffuseProduct = vec3(0.0, 0.4, 0.0);
+	specularProduct = vec3(0.1, 0.2, 0.1);
+	ambientProduct = vec3(0.1, 0.2, 0.1);
+	matShininess = 10.0;
+	
 	
 	// Attenuation (calculated in world space, cause that makes sense (although the MV transformation preserves distances, actually... so it doesn't really matter.))
 	float d = distance(vPosition, lightPosition);
-	attenuation = 1.0 /(0.55 + 0.005*d + 0.0001*d*d);
+	attenuation = 1.0; // /(0.55 + 0.005*d + 0.0001*d*d);
 	
 	N = (vNormal).xyz; // surface normal in world space
 	L = (lightPosition - vPosition).xyz; // direction towards light from this vertex in world space

@@ -25,9 +25,6 @@
 // World namespace
 function WorldManager(gl, shaderProgram, fCam){
 	
-	// Debugging var isInFrustum = true;
-	var counter = 0;
-	
 	// WebGL context
 	var gl = gl;
 	var shaderProgram = shaderProgram;
@@ -51,7 +48,7 @@ function WorldManager(gl, shaderProgram, fCam){
 		var loadCount = 0;
 		chunkLoadList.forEach(function (e, i, array){
 			if (loadCount < MAX_CHUNKS_PER_FRAME) {
-				e.Load();
+				chunks[e] = new Chunk(e, chunks);
 				loadCount++;
 			}
 		});
@@ -112,7 +109,6 @@ function WorldManager(gl, shaderProgram, fCam){
 	}
 	
 	function UpdateChunkVisibilityList(self){
-		var isLoaded;
 		var isSetup;
 		var needsRebuild;
 		var isVisible;
@@ -141,34 +137,36 @@ function WorldManager(gl, shaderProgram, fCam){
 				chunkUnloadList.push(thisChunk);
 			} else {
 				
-				var neighbourChunkCoords = [];
-				neighbourChunkCoords.push([thisChunkCoord[0]+1,thisChunkCoord[1],thisChunkCoord[2]]);
-				neighbourChunkCoords.push([thisChunkCoord[0]-1,thisChunkCoord[1],thisChunkCoord[2]]);
-				neighbourChunkCoords.push([thisChunkCoord[0],thisChunkCoord[1]+1,thisChunkCoord[2]]);
-				neighbourChunkCoords.push([thisChunkCoord[0],thisChunkCoord[1]-1,thisChunkCoord[2]]);
-				neighbourChunkCoords.push([thisChunkCoord[0],thisChunkCoord[1],thisChunkCoord[2]+1]);
-				neighbourChunkCoords.push([thisChunkCoord[0],thisChunkCoord[1],thisChunkCoord[2]-1]);
-				
-				// Load neighbouring chunks if they are close enough
-				neighbourChunkCoords.forEach(function (e,i,a) {
-					if (chunks[e] == undefined){
-						vecToChunk = subtract(currentChunkCoord,e);
-						squareDistToChunk = dot(vecToChunk,vecToChunk);
-						if(squareDistToChunk < CHUNK_LOAD_RADIUS){
-							chunks[e] = new Chunk(e, chunks);
+				//if (!thisChunk.fullChunkFaces[3]){
+					var neighbourChunkCoords = [];
+					if(chunks[thisChunkCoord[0]+1,thisChunkCoord[1],thisChunkCoord[2]] == undefined) neighbourChunkCoords[0] = ([thisChunkCoord[0]+1,thisChunkCoord[1],thisChunkCoord[2]]);
+					if(chunks[thisChunkCoord[0]-1,thisChunkCoord[1],thisChunkCoord[2]] == undefined) neighbourChunkCoords[1] = ([thisChunkCoord[0]-1,thisChunkCoord[1],thisChunkCoord[2]]);
+					if(chunks[thisChunkCoord[0],thisChunkCoord[1]+1,thisChunkCoord[2]] == undefined) neighbourChunkCoords[2] = ([thisChunkCoord[0],thisChunkCoord[1]+1,thisChunkCoord[2]]);
+					if(chunks[thisChunkCoord[0],thisChunkCoord[1],thisChunkCoord[2]+1] == undefined) neighbourChunkCoords[4] = ([thisChunkCoord[0],thisChunkCoord[1],thisChunkCoord[2]+1]);
+					if(chunks[thisChunkCoord[0],thisChunkCoord[1],thisChunkCoord[2]-1] == undefined) neighbourChunkCoords[5] = ([thisChunkCoord[0],thisChunkCoord[1],thisChunkCoord[2]-1]);
+					
+					// Only go down if we can't go out! Cheap way to only load the top layer...
+					if(neighbourChunkCoords.length == 0 || (thisChunkCoord[4] != undefined && chunks[thisChunkCoord].isEmpty)) neighbourChunkCoords.push([thisChunkCoord[0],thisChunkCoord[1]-1,thisChunkCoord[2]]);
+					//else console.log(neighbourChunkCoords.length);
+					
+					// Load neighbouring chunks if they are close enough
+					neighbourChunkCoords.forEach(function (e,i,a) {
+						if (chunks[e] == undefined){
+							vecToChunk = subtract(currentChunkCoord,e);
+							squareDistToChunk = dot(vecToChunk,vecToChunk);
+							if(squareDistToChunk < CHUNK_LOAD_RADIUS){
+								chunkLoadList.push(e);
+							}
 						}
-					}
-				});
+					});
+				//}
 				
-				
-				isLoaded = thisChunk.isLoaded;
 				isSetup = thisChunk.isSetup;
 				needsRebuild = thisChunk.needsRebuild || self.rebuildAll;
 				
 				if(chunks[key].ShouldRender()) chunkRenderList.push(chunks[key]);
-				if(!isLoaded) chunkLoadList.push(thisChunk);
 				if(!isSetup) chunkSetupList.push(thisChunk);
-				if(isLoaded && isSetup && needsRebuild) chunkRebuildList.push(thisChunk);
+				if(isSetup && needsRebuild) chunkRebuildList.push(thisChunk);
 			}
 		}
 	}
@@ -189,7 +187,7 @@ function WorldManager(gl, shaderProgram, fCam){
 		var chunkCoords = worldCoordsToChunkCoords(pos);
 		var chunk = chunks[chunkCoords];
 		var internalCoord = vec3(pos[0]-chunkCoords[0]*CHUNK_SIZE, pos[1]-chunkCoords[1]*CHUNK_SIZE, pos[2]-chunkCoords[2]*CHUNK_SIZE);
-		if(chunk != undefined && chunk.isLoaded) return chunk.voxels[internalCoord[0]][internalCoord[1]][internalCoord[2]];
+		if(chunk != undefined) return chunk.voxels[internalCoord[0]][internalCoord[1]][internalCoord[2]];
 		return false;
 	}
 	
@@ -221,9 +219,9 @@ function Chunk(chunkPosition, chunks){
 	
 	// state information variables
 	var needsRebuild = true;
-	var isLoaded = false;
 	var isSetup = false;
 	var isEmpty = true;
+	var isSurrounded = true;
 	var fullChunkFaces = []; // booleans used to not render completely surrounded chunks
 	
 	// attribute buffers, buffer locations and buffer 
@@ -264,30 +262,13 @@ function Chunk(chunkPosition, chunks){
 	}
 	
 	
-	function Load(){
-		this.isLoaded = true;
-		
-		// initialize block array
-		var voxels = [];
-		
-		// information variables
-		var needsRebuild = true;
-		var isLoaded = false;
-		var isSetup = false;
-		var isEmpty = true;
-		var fullChunkFaces = [true, true, true, true, true, true]; // booleans used to not render completely surrounded chunks
-		
-	}
-	
 	function Unload(){
-		this.isLoaded = false;
 		
 		var chunkPosition = null; // coordinates of the chunk offset (vec2)
 		var voxels = null;
 		
 		// information variables
 		var needsRebuild = null;
-		var isLoaded = null;
 		var isSetup = null;
 		var isEmpty = null;
 		var fullChunkFaces = null; // booleans used to not render completely surrounded chunks
@@ -296,13 +277,32 @@ function Chunk(chunkPosition, chunks){
 	
 	function Setup(){
 		
+		var x, y, z; // World coordinates of each voxel
+		
 		// Generate empty voxels throughout the chunk - replace with some more interesting world gen later
 		for(var i = 0; i < CHUNK_SIZE; i++) {
 			voxels[i] = [];
 			for(var j = 0; j < CHUNK_SIZE; j++) {
 				voxels[i][j] = [];
 				for(var k = 0; k < CHUNK_SIZE; k++) {
-					voxels[i][j][k] = BLOCK_TYPES.GRASS;
+					
+					
+					//voxels[i][j][k] = (Perlin.noise3d(i,j,k) < 0.8) ? BLOCK_TYPES.DEFAULT : BLOCK_TYPES.GRASS; // Cool space world thingy
+					//console.log(Perlin.noise3d(i,k));
+					//console.log(j);
+					
+					x = i+chunkPosition[0]*CHUNK_SIZE;
+					y = j+chunkPosition[1]*CHUNK_SIZE;
+					z = k+chunkPosition[2]*CHUNK_SIZE;
+					
+					//counter = 0;
+					var then = Date.now();
+					voxels[i][j][k] = (Perlin.noise(x/100,z/100)*20 < y) ? BLOCK_TYPES.DEFAULT : BLOCK_TYPES.GRASS; // Cool space world thingy
+					var now = Date.now();
+					counter += (now - then);
+					
+					
+					//console.log(Perlin.noise(i,k));
 					/*if(
 						i == 0
 					||	j == 0
@@ -319,12 +319,14 @@ function Chunk(chunkPosition, chunks){
 		this.isEmpty = false;
 		this.isSetup = true;
 		
+		//console.log(counter);
+		
+		
 	}
 	
 	function ShouldRender(){
 		
 		// get neighbouring chunks and check if this one is completely surrounded
-		var isSurrounded = true;
 		var neighbourChunks = [];
 		neighbourChunks.push(chunks[[chunkPosition[0]+1,chunkPosition[1],chunkPosition[2]]]);
 		neighbourChunks.push(chunks[[chunkPosition[0]-1,chunkPosition[1],chunkPosition[2]]]);
@@ -333,17 +335,18 @@ function Chunk(chunkPosition, chunks){
 		neighbourChunks.push(chunks[[chunkPosition[0],chunkPosition[1],chunkPosition[2]+1]]);
 		neighbourChunks.push(chunks[[chunkPosition[0],chunkPosition[1],chunkPosition[2]-1]]);
 		
-		isSurrounded = isSurrounded && neighbourChunks[0] != undefined && neighbourChunks[0].fullChunkFaces[1] && !neighbourChunks[0].needsRebuild;
-		isSurrounded = isSurrounded && neighbourChunks[1] != undefined && neighbourChunks[1].fullChunkFaces[0] && !neighbourChunks[1].needsRebuild;
-		isSurrounded = isSurrounded && neighbourChunks[2] != undefined && neighbourChunks[2].fullChunkFaces[3] && !neighbourChunks[2].needsRebuild;
-		isSurrounded = isSurrounded && neighbourChunks[3] != undefined && neighbourChunks[3].fullChunkFaces[2] && !neighbourChunks[3].needsRebuild;
-		isSurrounded = isSurrounded && neighbourChunks[4] != undefined && neighbourChunks[4].fullChunkFaces[5] && !neighbourChunks[4].needsRebuild;
-		isSurrounded = isSurrounded && neighbourChunks[5] != undefined && neighbourChunks[5].fullChunkFaces[4] && !neighbourChunks[5].needsRebuild;
+		this.isSurrounded = true;
+		this.isSurrounded = this.isSurrounded && neighbourChunks[0] != undefined && neighbourChunks[0].fullChunkFaces[1] && !neighbourChunks[0].needsRebuild;
+		this.isSurrounded = this.isSurrounded && neighbourChunks[1] != undefined && neighbourChunks[1].fullChunkFaces[0] && !neighbourChunks[1].needsRebuild;
+		this.isSurrounded = this.isSurrounded && neighbourChunks[2] != undefined && neighbourChunks[2].fullChunkFaces[3] && !neighbourChunks[2].needsRebuild;
+		this.isSurrounded = this.isSurrounded && neighbourChunks[3] != undefined && neighbourChunks[3].fullChunkFaces[2] && !neighbourChunks[3].needsRebuild;
+		this.isSurrounded = this.isSurrounded && neighbourChunks[4] != undefined && neighbourChunks[4].fullChunkFaces[5] && !neighbourChunks[4].needsRebuild;
+		this.isSurrounded = this.isSurrounded && neighbourChunks[5] != undefined && neighbourChunks[5].fullChunkFaces[4] && !neighbourChunks[5].needsRebuild;
 		
 		// Do view (frustum) culling here...
 		var inView = World.frustumCam.CullSquareTest(chunkCoordsToWorldCoords(chunkPosition), CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE);
 		
-		return this.isSetup && this.isLoaded && !this.isEmpty && !isSurrounded && inView;
+		return this.isSetup && !this.isEmpty && !this.isSurrounded && inView;
 	}
 	
 	// interface for Chunk
@@ -351,19 +354,17 @@ function Chunk(chunkPosition, chunks){
 		chunkPosition,
 		voxels : voxels,
 		needsRebuild: needsRebuild,
-		isLoaded: isLoaded,
 		isSetup: isSetup,
 		isEmpty: isEmpty,
+		isSurrounded: isSurrounded,
 		fullChunkFaces: fullChunkFaces,
 		ShouldRender: ShouldRender,
 		Render : Render,
 		CreateMesh: CreateMesh,
-		Load: Load,
 		Unload: Unload,
 		Setup: Setup
 	}
 }
-
 
 // takes woorld coord and converts it to chunk coords (vec3) - use for indexing the chunks list
 function worldCoordsToChunkCoords(pos){
@@ -384,7 +385,7 @@ function chunkCoordsToWorldCoords(chunkPosition){
 }
 
 // "enum" for block types
-var BLOCK_TYPES = {
+const BLOCK_TYPES = {
 	
 	DEFAULT:	"0",
 	GRASS:		"1",
@@ -395,5 +396,11 @@ var BLOCK_TYPES = {
 	SAND:		"6",
 	
 }
+
+var BLOCK_INDEX = [];
+for (var key in BLOCK_TYPES){
+	BLOCK_INDEX.push(BLOCK_TYPES[key]);
+}
+
 
 

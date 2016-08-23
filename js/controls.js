@@ -95,10 +95,6 @@ function Frustum(init_eye, init_at, init_up, init_fovy, init_near, init_far, ini
 		this.modelView = lookAt(this.eye,this.at,this.up);
 		this.projection = perspective( this.fovy, this.aspect, this.near, this.far )
 		
-		// time
-		counter = 0;
-		var then = Date.now();
-		
 		// compute the sizes of the near and far planes
 		nearHeight = 2.0 * Math.tan((this.fovy*Math.PI/180) / 2.0) * this.near*1.05; // adding 5% to avoid weird boundary bug
 		nearWidth  = nearHeight * aspect;
@@ -133,10 +129,6 @@ function Frustum(init_eye, init_at, init_up, init_fovy, init_near, init_far, ini
 		planes.push(new Plane(this.nbr, this.ntr, this.fbr));
 		planes.push(new Plane(this.ntl, this.ntr, this.nbr));
 		planes.push(new Plane(this.ftr, this.ftl, this.fbl));
-		
-		var now = Date.now();
-		counter = (now - then);
-		//console.log(counter);
 		
 	}
 	
@@ -278,7 +270,7 @@ function NormalControls (camera) {
 	var moveBackwardBool = false;	// should be changed by keydown even listener
 	
 	// speed and direction variables.
-	var spd = 0.005; // distance per milisecond
+	var spd = 0.02; // distance per milisecond
 	var dt; // time in miliseconds - passed at every frame (dt since last frame)
 	var dir = vec3(0,0,0); // reset every frame; holds the direction of movement in this frame
 	

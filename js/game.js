@@ -93,10 +93,16 @@ var fpsCounter = 0;
 // World management and chunk loading
 var World;
 var MAX_CHUNKS_PER_FRAME = 1; // the maximum number of chunks to load per frame
-const CHUNK_SIZE = 16; // number of voxels in each chunk
+const CHUNK_SIZE = 32; // number of voxels in each chunk
 
-var CHUNK_LOAD_RADIUS = 9; // Square of the distance at which new chunks should load
-var CHUNK_UNLOAD_RADIUS = 64; // Square of the distance at which chunks should unload
+var CHUNK_LOAD_RADIUS = 32; // Square of the distance at which new chunks should load
+var CHUNK_UNLOAD_RADIUS = 45; // Square of the distance at which chunks should unload
+
+// Perlin noise generator
+var Perlin = new SimplexNoise();
+
+// Debugging counter
+var counter = 0;
 
 window.onload = function(e){
 	
@@ -118,7 +124,7 @@ window.onload = function(e){
 	var initial_up	= [0, 1, 0];
 	var initial_fovy 	= 70;
 	var initial_near 	= 0.01;
-	var initial_far 	= 150;
+	var initial_far 	= 200;
 	var initial_aspect = canvas.width/canvas.height;
 	
 	var frustum_eye = [CHUNK_SIZE-1, 0, CHUNK_SIZE-1];
