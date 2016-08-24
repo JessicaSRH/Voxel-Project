@@ -86,26 +86,26 @@ var DefaultMesher = function (voxels, chunkPosition){
 				else checkForFullChunkFace[5] = false;
 				
 				// is the block empty?
-				if (voxels[i][j][k] != BLOCK_TYPES.DEFAULT){
+				if (voxels[i][j][k] != VOXEL_TYPES.DEFAULT){
 					// boolean array used for culling faces; index order is:
 					// +x, -x, +y, -y, +z, -z
 					var shouldDraw = [];
 					
 					// check if the block has neighbours within chunk
-					shouldDraw[0] = (i+1 >= CHUNK_SIZE	|| voxels[i+1][j][k] == BLOCK_TYPES.DEFAULT);
-					shouldDraw[1] = (i-1 < 0			|| voxels[i-1][j][k] == BLOCK_TYPES.DEFAULT);
-					shouldDraw[2] = (j+1 >= CHUNK_SIZE	|| voxels[i][j+1][k] == BLOCK_TYPES.DEFAULT);
-					shouldDraw[3] = (j-1 < 0			|| voxels[i][j-1][k] == BLOCK_TYPES.DEFAULT);
-					shouldDraw[4] = (k+1 >= CHUNK_SIZE	|| voxels[i][j][k+1] == BLOCK_TYPES.DEFAULT);
-					shouldDraw[5] = (k-1 < 0			|| voxels[i][j][k-1] == BLOCK_TYPES.DEFAULT);
+					shouldDraw[0] = (i+1 >= CHUNK_SIZE	|| voxels[i+1][j][k] == VOXEL_TYPES.DEFAULT);
+					shouldDraw[1] = (i-1 < 0			|| voxels[i-1][j][k] == VOXEL_TYPES.DEFAULT);
+					shouldDraw[2] = (j+1 >= CHUNK_SIZE	|| voxels[i][j+1][k] == VOXEL_TYPES.DEFAULT);
+					shouldDraw[3] = (j-1 < 0			|| voxels[i][j-1][k] == VOXEL_TYPES.DEFAULT);
+					shouldDraw[4] = (k+1 >= CHUNK_SIZE	|| voxels[i][j][k+1] == VOXEL_TYPES.DEFAULT);
+					shouldDraw[5] = (k-1 < 0			|| voxels[i][j][k-1] == VOXEL_TYPES.DEFAULT);
 					
 					//check if voxels at the border have neighbours in neighbouring chunks
-					//if (neighbourChunks[0] != undefined && neighbourChunks[0].isLoaded && neighbourChunks[0].isSetup && shouldDraw[0] && i+1 >= CHUNK_SIZE) shouldDraw[0] = neighbourChunks[0].voxels[0][j][k] 				== BLOCK_TYPES.DEFAULT;
-					//if (neighbourChunks[1] != undefined && neighbourChunks[1].isLoaded && neighbourChunks[1].isSetup && shouldDraw[1] && i-1 < 0) 			shouldDraw[1] = neighbourChunks[1].voxels[CHUNK_SIZE-1][j][k]	== BLOCK_TYPES.DEFAULT;
-					//if (neighbourChunks[2] != undefined && neighbourChunks[2].isLoaded && neighbourChunks[2].isSetup && shouldDraw[2] && j+1 >= CHUNK_SIZE) shouldDraw[2] = neighbourChunks[2].voxels[i][0][k] 				== BLOCK_TYPES.DEFAULT;
-					//if (neighbourChunks[3] != undefined && neighbourChunks[3].isLoaded && neighbourChunks[3].isSetup && shouldDraw[3] && j-1 < 0) 			shouldDraw[3] = neighbourChunks[3].voxels[i][CHUNK_SIZE-1][k]	== BLOCK_TYPES.DEFAULT;
-					//if (neighbourChunks[4] != undefined && neighbourChunks[4].isLoaded && neighbourChunks[4].isSetup && shouldDraw[4] && k+1 >= CHUNK_SIZE) shouldDraw[4] = neighbourChunks[4].voxels[i][j][0] 				== BLOCK_TYPES.DEFAULT;
-					//if (neighbourChunks[5] != undefined && neighbourChunks[5].isLoaded && neighbourChunks[5].isSetup && shouldDraw[5] && k-1 < 0) 			shouldDraw[5] = neighbourChunks[5].voxels[i][j][CHUNK_SIZE-1]	== BLOCK_TYPES.DEFAULT;
+					//if (neighbourChunks[0] != undefined && neighbourChunks[0].isLoaded && neighbourChunks[0].isSetup && shouldDraw[0] && i+1 >= CHUNK_SIZE) shouldDraw[0] = neighbourChunks[0].voxels[0][j][k] 				== VOXEL_TYPES.DEFAULT;
+					//if (neighbourChunks[1] != undefined && neighbourChunks[1].isLoaded && neighbourChunks[1].isSetup && shouldDraw[1] && i-1 < 0) 			shouldDraw[1] = neighbourChunks[1].voxels[CHUNK_SIZE-1][j][k]	== VOXEL_TYPES.DEFAULT;
+					//if (neighbourChunks[2] != undefined && neighbourChunks[2].isLoaded && neighbourChunks[2].isSetup && shouldDraw[2] && j+1 >= CHUNK_SIZE) shouldDraw[2] = neighbourChunks[2].voxels[i][0][k] 				== VOXEL_TYPES.DEFAULT;
+					//if (neighbourChunks[3] != undefined && neighbourChunks[3].isLoaded && neighbourChunks[3].isSetup && shouldDraw[3] && j-1 < 0) 			shouldDraw[3] = neighbourChunks[3].voxels[i][CHUNK_SIZE-1][k]	== VOXEL_TYPES.DEFAULT;
+					//if (neighbourChunks[4] != undefined && neighbourChunks[4].isLoaded && neighbourChunks[4].isSetup && shouldDraw[4] && k+1 >= CHUNK_SIZE) shouldDraw[4] = neighbourChunks[4].voxels[i][j][0] 				== VOXEL_TYPES.DEFAULT;
+					//if (neighbourChunks[5] != undefined && neighbourChunks[5].isLoaded && neighbourChunks[5].isSetup && shouldDraw[5] && k-1 < 0) 			shouldDraw[5] = neighbourChunks[5].voxels[i][j][CHUNK_SIZE-1]	== VOXEL_TYPES.DEFAULT;
 					
 					
 					createCube([i,j,k], shouldDraw);

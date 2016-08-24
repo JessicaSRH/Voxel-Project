@@ -43,7 +43,12 @@ function WorldManager(gl, shaderProgram, fCam){
 	// frustum camera
 	var frustumCam = fCam;
 	
+	// The mesher
 	var Mesher = DefaultMesher;
+	
+	//The voxel generator
+	var VoxelGenerator = DefaultVoxelGenerator;
+	
 	
 	function UpdateChunkLoadList(self){
 		var loadCount = 0;
@@ -60,7 +65,7 @@ function WorldManager(gl, shaderProgram, fCam){
 		var setupCount = 0;
 		chunkSetupList.forEach(function (e, i, array){
 			if(setupCount < MAX_CHUNKS_PER_FRAME){
-				e.Setup();
+				e.Setup(self.VoxelGenerator);
 				setupCount++; // total number of chunks loaded THIS FRAME
 				self.numChunksSetup++; // total number of chunks loaded IN TOTAL
 			}
@@ -120,75 +125,44 @@ function WorldManager(gl, shaderProgram, fCam){
 			// Unload chunk if it is too far away
 			vecToChunk = subtract(currentChunkCoord,thisChunkCoord);
 			squareDistToChunk = dot(vecToChunk,vecToChunk);
-			if(squareDistToChunk > CHUNK_UNLOAD_RADIUS){
+			if(squareDistToChunk > CHUNK_UNLOAD_RADIUS && !chunkUnloadList.includes(thisChunk)){
 				chunkUnloadList.push(thisChunk);
 			} else {
-				
-				var neighbourChunkCoords = [];
-				neighbourChunkCoords[0] = [thisChunkCoord[0]+1,thisChunkCoord[1],thisChunkCoord[2]];
-				neighbourChunkCoords[1] = [thisChunkCoord[0]-1,thisChunkCoord[1],thisChunkCoord[2]];
-				neighbourChunkCoords[2] = [thisChunkCoord[0],thisChunkCoord[1]+1,thisChunkCoord[2]];
-				neighbourChunkCoords[3] = [thisChunkCoord[0],thisChunkCoord[1]-1,thisChunkCoord[2]];
-				neighbourChunkCoords[4] = [thisChunkCoord[0],thisChunkCoord[1],thisChunkCoord[2]+1];
-				neighbourChunkCoords[5] = [thisChunkCoord[0],thisChunkCoord[1],thisChunkCoord[2]-1];
-				
-				//else console.log(neighbourChunkCoords.length);
-				
-				// Load neighbouring chunks if they are close enough
-				neighbourChunkCoords.forEach(function (e,i,a) {
-					if (chunks[e] == undefined){
-						vecToChunk = subtract(currentChunkCoord,e);
-						squareDistToChunk = dot(vecToChunk,vecToChunk);
-						if(	   squareDistToChunk < CHUNK_LOAD_RADIUS
-							&& (i != 3 || (thisChunk.isSetup && !thisChunk.fullChunkFaces[3]))
-						){
-							chunkLoadList.push(e);
-						}
-					}
-				});
-				
 				
 				isSetup = thisChunk.isSetup;
 				needsRebuild = thisChunk.needsRebuild || self.rebuildAll;
 				
-				
-				
-				// Check if the chunk should be setup
-				/*
-					Current strat:					Only setup a chunk if at least one of the neighbour chunks in the direction of player	isSetup and does not have a full chunk face towards the chunk in consideration
-					Maybe use less strict stratt?:	Only setup a chunk if at least one of the neighbour chunks 								isSetup and does not have a full chunk face towards the chunk in consideration
-				*/
-				
-				if(!isSetup){
+				if(isSetup){ // if this chunk is setup, consider loading more chunks around it
+					var neighbourChunkCoords = [];
+					neighbourChunkCoords[0] = [thisChunkCoord[0]+1,thisChunkCoord[1],thisChunkCoord[2]];
+					neighbourChunkCoords[1] = [thisChunkCoord[0]-1,thisChunkCoord[1],thisChunkCoord[2]];
+					neighbourChunkCoords[2] = [thisChunkCoord[0],thisChunkCoord[1]+1,thisChunkCoord[2]];
+					neighbourChunkCoords[3] = [thisChunkCoord[0],thisChunkCoord[1]-1,thisChunkCoord[2]];
+					neighbourChunkCoords[4] = [thisChunkCoord[0],thisChunkCoord[1],thisChunkCoord[2]+1];
+					neighbourChunkCoords[5] = [thisChunkCoord[0],thisChunkCoord[1],thisChunkCoord[2]-1];
 					
-					var shouldSetup = false;
-					var directionsToCheck = subtract(thisChunkCoord, currentChunkCoord); 										// the directions in which neighbours should be considered
-					var nCoord = [thisChunkCoord[0], thisChunkCoord[1], thisChunkCoord[2] ]; 									// variable holding the coordinate of the neighbour that is currently being checked
-					for (var i = 0; i < 3; i++){ 																				// iterate over each of the directions to consider
-						if (directionsToCheck[i] != 0) { 																		// if this direction is not zero (this occurs if the chunk is axis-aligned with the camera)
-							directionsToCheck[i] = directionsToCheck[i]/Math.abs(directionsToCheck[i]);							// get + or - 1 in along the axis we are currently checking
-							nCoord[i] -= directionsToCheck[i];																	// add the + or - 1 to the neighbour we are considering
-							var faceToCheck = i*2;																				// get the index of the face to check
-							if (directionsToCheck[i] < 0) faceToCheck += 1;														// add one if the direction is negative (since the index of the negative direction is 1 higher)
-							if (chunks[nCoord] != undefined && chunks[nCoord].isSetup && !chunks[nCoord].fullChunkFaces[faceToCheck]) shouldSetup = true;
-																																// if the neighbour chunk is setup, and does not have a full chunk face facing towards the new chunk, setup the new chunk
-							nCoord[i] += directionsToCheck[i];																	// set the neighbour coordinate back to be ready for the next axis (i)
+					// Load neighbouring chunks if they are close enough
+					neighbourChunkCoords.forEach(function (e,i,a) {
+						if (chunks[e] == undefined){ // if the neighbour is not already loaded
+							vecToChunk = subtract(currentChunkCoord,e); // vector points towards players chunk
+							squareDistToChunk = dot(vecToChunk,vecToChunk); // compute (squared) distance from player to chunk in consideration
+							if (squareDistToChunk < CHUNK_FORCE_LOAD_RADIUS){ chunkLoadList.push(e); } // load the chunk if it is below the force load radius
+							else if(squareDistToChunk < CHUNK_LOAD_RADIUS // else check if the chunk is within the general max load radius
+									&& (	(i == 0 && isSetup && thisChunk.fullChunkFaces[1] != undefined && !thisChunk.fullChunkFaces[1]) // 
+										||	(i == 1 && isSetup && thisChunk.fullChunkFaces[0] != undefined && !thisChunk.fullChunkFaces[0]) // Checks if the chunk faces towards the chunk considered for loading are full -
+										||	(i == 2 && isSetup && thisChunk.fullChunkFaces[3] != undefined && !thisChunk.fullChunkFaces[3]) // only load the chunk if at least one face is not full
+										||	(i == 3 && isSetup && thisChunk.fullChunkFaces[2] != undefined && !thisChunk.fullChunkFaces[2]) // this saves SO MUCH MEMORY - totally worth it
+										||	(i == 4 && isSetup && thisChunk.fullChunkFaces[5] != undefined && !thisChunk.fullChunkFaces[5]) // 
+										||	(i == 5 && isSetup && thisChunk.fullChunkFaces[4] != undefined && !thisChunk.fullChunkFaces[4]) // 
+									)
+							){
+								chunkLoadList.push(e); // add the coordinates for loading if the test is passed
+							}
 						}
-					}
-					var shouldForceSetup = dot(directionsToCheck, directionsToCheck) < CHUNK_FORCE_SETUP_RADIUS;
-					if(shouldSetup || shouldForceSetup) chunkSetupList.push(thisChunk);
-					
-					
-					
-					//counter = 0;					// Timer code, for debugging
-					//var then = Date.now();
-					//var now = Date.now();
-					//counter += (now - then);
-					
-					
+					});
 				}
 				
-				
+				if(!isSetup)chunkSetupList.push(thisChunk);
 				if(isSetup && needsRebuild) chunkRebuildList.push(thisChunk);
 				if(chunks[key].ShouldRender()) chunkRenderList.push(chunks[key]);
 			}
@@ -207,8 +181,8 @@ function WorldManager(gl, shaderProgram, fCam){
 		
 	}
 	
-	// retrieve block at given position
-	function getBlock(pos){
+	// retrieve voxel at given position
+	function getVoxel(pos){
 		var chunkCoords = worldCoordsToChunkCoords(pos);
 		var chunk = chunks[chunkCoords];
 		var internalCoord = vec3(pos[0]-chunkCoords[0]*CHUNK_SIZE, pos[1]-chunkCoords[1]*CHUNK_SIZE, pos[2]-chunkCoords[2]*CHUNK_SIZE);
@@ -219,13 +193,14 @@ function WorldManager(gl, shaderProgram, fCam){
 	// interface for WorldManager
 	return {
 		
-		getBlock: getBlock,
+		getVoxel: getVoxel,
 		rebuildAll: rebuildAll,
 		numChunksSetup: numChunksSetup,
 		numChunksRendered: numChunksRendered,
 		frustumCam : frustumCam,
 		Render: Render, 
 		Mesher: Mesher,
+		VoxelGenerator: VoxelGenerator,
 		Chunk : Chunk,
 		Update: Update
 		
@@ -301,9 +276,10 @@ function Chunk(chunkPosition, chunks){
 		
 	}
 	
-	function Setup(){
+	function Setup(VoxelGenerator){
 		
-		var x, y, z; // World coordinates of each voxel
+		// Get chunk coord in world coordinates
+		var chunkWorldCoords = chunkCoordsToWorldCoords(chunkPosition);
 		
 		// Generate empty voxels throughout the chunk - replace with some more interesting world gen later
 		for(var i = 0; i < CHUNK_SIZE; i++) {
@@ -311,16 +287,7 @@ function Chunk(chunkPosition, chunks){
 			for(var j = 0; j < CHUNK_SIZE; j++) {
 				voxels[i][j] = [];
 				for(var k = 0; k < CHUNK_SIZE; k++) {
-					
-					
-					//voxels[i][j][k] = (Perlin.noise3d(i,j,k) < 0.8) ? BLOCK_TYPES.DEFAULT : BLOCK_TYPES.GRASS; // Cool space world thingy
-					
-					x = i+chunkPosition[0]*CHUNK_SIZE;
-					y = j+chunkPosition[1]*CHUNK_SIZE;
-					z = k+chunkPosition[2]*CHUNK_SIZE;
-					
-					voxels[i][j][k] = (Perlin.noise(x/200,z/200)*50 < y) ? BLOCK_TYPES.DEFAULT : BLOCK_TYPES.GRASS; // Cool valley ish terrain thingy
-					
+					voxels[i][j][k] = VoxelGenerator(i+chunkWorldCoords[0], j+chunkWorldCoords[1], k+chunkWorldCoords[2]);
 				}
 			}
 		}
@@ -351,7 +318,7 @@ function Chunk(chunkPosition, chunks){
 		// Do view (frustum) culling here...
 		var inView = World.frustumCam.CullSquareTest(chunkCoordsToWorldCoords(chunkPosition), CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE);
 		
-		return this.isSetup && !this.isEmpty && !this.isSurrounded && inView;
+		return this.isSetup && inView && !this.isEmpty && !this.isSurrounded;
 	}
 	
 	// interface for Chunk
@@ -373,39 +340,11 @@ function Chunk(chunkPosition, chunks){
 
 // takes woorld coord and converts it to chunk coords (vec3) - use for indexing the chunks list
 function worldCoordsToChunkCoords(pos){
-	var result = [];
-	result[0] = Math.floor(pos[0]/CHUNK_SIZE);
-	result[1] = Math.floor(pos[1]/CHUNK_SIZE);
-	result[2] = Math.floor(pos[2]/CHUNK_SIZE);
-	return result;
+	return [Math.floor(pos[0]/CHUNK_SIZE), Math.floor(pos[1]/CHUNK_SIZE), Math.floor(pos[2]/CHUNK_SIZE)];
 }
 
 // converts chunk coordinates back to world coordinates
 function chunkCoordsToWorldCoords(chunkPosition){
-	var result = [];
-	result[0] = chunkPosition[0]*CHUNK_SIZE;
-	result[1] = chunkPosition[1]*CHUNK_SIZE;
-	result[2] = chunkPosition[2]*CHUNK_SIZE;
-	return result;
+	return [chunkPosition[0]*CHUNK_SIZE, chunkPosition[1]*CHUNK_SIZE, chunkPosition[2]*CHUNK_SIZE];
 }
-
-// "enum" for block types
-const BLOCK_TYPES = {
-	
-	DEFAULT:	"0",
-	GRASS:		"1",
-	DIRT:		"2",
-	WATER:		"3",
-	STONE:		"4",
-	WOOD:		"5",
-	SAND:		"6",
-	
-}
-
-var BLOCK_INDEX = [];
-for (var key in BLOCK_TYPES){
-	BLOCK_INDEX.push(BLOCK_TYPES[key]);
-}
-
-
 
