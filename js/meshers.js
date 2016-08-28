@@ -43,47 +43,524 @@ function MeshObject(){
 	
 }
 
+function DefaultMesher(voxels, chunkPosition){
+	MeshingHelper(voxels, chunkPosition, NaiveMeshing, this);
+}
 
+function GreedyMesher(voxels, chunkPosition){
+	MeshingHelper(voxels, chunkPosition, GreedyMeshing, this);
+}
+
+function MeshingHelper(voxels, chunkPosition, MeshingAlgorithm, self){
+	
+	// reset vertex buffer arrays
+	var points = [];
+	var colors = [];
+	var normals = [];
+	var ambientProducts = [];
+	var diffuseProducts = [];
+	var specularProducts = [];
+	var matShininesses = [];
+	
+	
+	// dictionary denoting, for each coordinate (x,y,z), whether it's face is waiting to be included - true if a coordinate is waiting to be included
+	var mask = SimpleMasker(voxels);
+	
+	// set initial mesh flags
+	self.flags["isEmpty"] = false;
+	self.flags["fullChunkFaces"] = [false, false, false, false, false, false];
+	
+	// Compute the mesh
+	MeshingAlgorithm(chunkPosition, mask, points, normals, colors, ambientProducts, diffuseProducts, specularProducts, matShininesses);
+	
+	console.log(points.length);
+	console.log(ambientProducts.length);
+	console.log(diffuseProducts.length);
+	console.log(specularProducts.length);
+	console.log(matShininesses.length);
+	
+	// set the vertex buffers and vertex attributes
+	self.vertexBuffers = [
+		new vertextAttributeObject("vPosition", 4),
+		new vertextAttributeObject("vColor", 4),
+		new vertextAttributeObject("vNormal", 4)/*,
+		new vertextAttributeObject("vAmbientProduct", 3),
+		new vertextAttributeObject("vDiffuseProduct", 3),
+		new vertextAttributeObject("vSpecularProduc", 3),
+		new vertextAttributeObject("vMatShininess", 1)*/
+	];
+	
+	self.vertexAttrValues = [points, colors, normals, ambientProducts];//, diffuseProducts, specularProducts, matShininesses];
+	
+}
+
+
+
+// Mask which faces of each voxel should be drawn - does simple neighbour culling
+var SimpleMasker = function(voxels){
+	
+	var mask = [];
+	
+	// create mask indicating which voxel faces to include in the mesh
+	for(var i = 0; i < CHUNK_SIZE; i++) {				// iterate over each voxel layer
+		mask[i] = [];
+		for(var j = 0; j < CHUNK_SIZE; j++) {			// iterate vertically
+		mask[i][j] = [];
+			for(var k = 0; k < CHUNK_SIZE; k++) {		// iterate horizontally
+				
+				var maskEntry = [false, false, false, false, false, false];
+				
+				if (voxels[i][j][k] != undefined && voxels[i][j][k] != VOXEL_TYPES.DEFAULT){
+					
+					if (i+1 >= CHUNK_SIZE || voxels[i+1][j][k] == VOXEL_TYPES.DEFAULT) maskEntry[0] = voxels[i][j][k]; // positive x
+					if (j+1 >= CHUNK_SIZE || voxels[i][j+1][k] == VOXEL_TYPES.DEFAULT) maskEntry[2] = voxels[i][j][k]; // positive y
+					if (k+1 >= CHUNK_SIZE || voxels[i][j][k+1] == VOXEL_TYPES.DEFAULT) maskEntry[4] = voxels[i][j][k]; // positive z
+					if (i-1 < 0 || voxels[i-1][j][k] == VOXEL_TYPES.DEFAULT) maskEntry[1] = voxels[i][j][k]; // negative x
+					if (j-1 < 0 || voxels[i][j-1][k] == VOXEL_TYPES.DEFAULT) maskEntry[3] = voxels[i][j][k]; // negative y
+					if (k-1 < 0 || voxels[i][j][k-1] == VOXEL_TYPES.DEFAULT) maskEntry[5] = voxels[i][j][k]; // negative z
+					
+				}
+				
+				mask[i][j][k] = maskEntry;
+				
+			}
+		}
+	}
+	return mask;
+}
+
+var NaiveMeshing = function(chunkPosition, mask, points, normals, colors, ambientProducts, diffuseProducts, specularProducts, matShininesses){
+
+	for (var p = 0; p < 6; p++){ // six sides to a voxel
+		for(var i = 0; i < CHUNK_SIZE; i++) {
+			for(var j = 0; j < CHUNK_SIZE; j++) {
+				for(var k = 0; k < CHUNK_SIZE; k++) {
+					if(mask[i][j][k][p] == true){
+						
+						var t = mask[i][j][k][p];
+						var current_ind = [face_vertex_ind[p][0], face_vertex_ind[p][1], face_vertex_ind[p][2], face_vertex_ind[p][0], face_vertex_ind[p][2], face_vertex_ind[p][3]];
+						
+						for(var q = 0; q < 6; q++){ // six vertices to make two triangles to make a voxel face
+							var pos = [];
+							pos[0] = vertices[current_ind[q]][0] + i + chunkPosition[0]*CHUNK_SIZE;
+							pos[1] = vertices[current_ind[q]][1] + j + chunkPosition[1]*CHUNK_SIZE;
+							pos[2] = vertices[current_ind[q]][2] + k + chunkPosition[2]*CHUNK_SIZE;
+							pos[3] = vertices[current_ind[q]][3];
+							
+							points.push(pos);
+							normals.push(std_normals[p]);
+							colors.push([1,0,0,0]);
+							ambientProducts.push(	[SUN_LIGHT_COEFFS[0]*VOXEL_TYPE_LIGHTING[t][0], SUN_LIGHT_COEFFS[1]*VOXEL_TYPE_LIGHTING[t][1], SUN_LIGHT_COEFFS[2]*VOXEL_TYPE_LIGHTING[t][2]]);
+							diffuseProducts.push(	[SUN_LIGHT_COEFFS[3]*VOXEL_TYPE_LIGHTING[t][3], SUN_LIGHT_COEFFS[4]*VOXEL_TYPE_LIGHTING[t][4], SUN_LIGHT_COEFFS[5]*VOXEL_TYPE_LIGHTING[t][5]]);
+							specularProducts.push(	[SUN_LIGHT_COEFFS[6]*VOXEL_TYPE_LIGHTING[t][6], SUN_LIGHT_COEFFS[7]*VOXEL_TYPE_LIGHTING[t][7], SUN_LIGHT_COEFFS[8]*VOXEL_TYPE_LIGHTING[t][8]]);
+							matShininesses.push(VOXEL_TYPE_LIGHTING[t][9]);
+						}
+					}
+				}
+			}
+		}
+	}
+	
+}
+
+var GreedyMeshing = function(chunkPosition, mask, points, normals, colors, ambientProducts, diffuseProducts, specularProducts, matShininesses){
+	
+	// list of quads that need to be rendered
+	var quads = [];
+	
+	// temporary variable used to hold the quad that is currently being built
+	var quad;
+	
+	// build a list of quads
+	for (var p = 0; p < 6; p++){ // six sides to a voxel
+		for(var i = 0; i < CHUNK_SIZE; i++) { // layer
+			for(var j = 0; j < CHUNK_SIZE; j++) { // vertical
+				for(var k = 0; k < CHUNK_SIZE; k++) { // horizontal
+					
+					var x, y, z;
+					
+					switch(p){
+						case 0:
+							x = i;
+							y = k;
+							z = j;
+							break;
+						case 1:
+							x = CHUNK_SIZE - 1 - i;
+							y = CHUNK_SIZE - 1 - k;
+							z = CHUNK_SIZE - 1 - j;
+							break;
+						case 2:
+							x = k;
+							y = i;
+							z = j;
+							break;
+						case 3:
+							x = CHUNK_SIZE - 1 - j;
+							y = CHUNK_SIZE - 1 - i;
+							z = CHUNK_SIZE - 1 - k;
+							break;
+						case 4:
+							x = j;
+							y = k;
+							z = i;
+							break;
+						case 5:
+							x = CHUNK_SIZE - 1 - j;
+							y = CHUNK_SIZE - 1 - k;
+							z = CHUNK_SIZE - 1 - i;
+							break;
+					}
+					
+					if(mask[x][y][z][p] && quad == undefined) { // start creating new quad
+						
+						quad = new Quad(x, y, z, 1, 1, p, mask[x][y][z][p]);
+						
+					} else if (quad != undefined && mask[x][y][z][p] == quad.type) { // expand horizontally (OMG IT'S ACTUALLY WORKING.)
+						
+						quad.add(new Quad(x, y, z, 1, 1, p, mask[x][y][z][p]));
+						
+					}
+					
+					
+					if ((!mask[x][y][z][p] || k == CHUNK_SIZE - 1) && quad != undefined) { // expand vertically
+						var canExpandVertically = true;
+						var v_index = 1;
+						while(canExpandVertically){
+							for(var w = 0; w < quad.w; w++){
+								switch(p){
+									case 0:
+										canExpandVertically = canExpandVertically && quad.z+v_index < CHUNK_SIZE && mask[x][quad.y+w][quad.z+v_index][p] == quad.type;
+										break;
+									case 1:
+										canExpandVertically = canExpandVertically && quad.z-v_index >= 0 && mask[x][quad.y+w][quad.z-v_index][p] == quad.type;
+										break;
+									case 2:
+										canExpandVertically = canExpandVertically && quad.z+v_index < CHUNK_SIZE && mask[quad.x+w][y][quad.z+v_index][p] == quad.type;
+										break;
+									case 3:
+										canExpandVertically = canExpandVertically && quad.x-v_index >= 0 && mask[quad.x-v_index][y][quad.z+w][p] == quad.type;
+										break;
+									case 4:
+										canExpandVertically = canExpandVertically && quad.x+v_index < CHUNK_SIZE && mask[quad.x+v_index][quad.y+w][z][p] == quad.type;
+										break;
+									case 5:
+										canExpandVertically = canExpandVertically && quad.x-v_index >= 0 && mask[quad.x-v_index][quad.y+w][z][p] == quad.type;
+										break;
+								}
+							}
+							if(canExpandVertically) {
+								for(var w = 0; w < quad.w; w++){
+									switch(p){
+										case 0:
+											mask[x][quad.y+w][quad.z+v_index][p] = false;
+											break;
+										case 1:
+											mask[x][quad.y+w][quad.z-v_index][p] = false;
+											break;
+										case 2:
+											mask[quad.x+w][y][quad.z+v_index][p] = false;
+											break;
+										case 3:
+											mask[quad.x-v_index][y][quad.z+w][p] = false;
+											break;
+										case 4:
+											mask[quad.x+v_index][quad.y+w][z][p] = false;
+											break;
+										case 5:
+											mask[quad.x-v_index][quad.y+w][z][p] = false;
+											break;
+									}
+								}
+								quad.h += 1;
+							}
+							v_index++;
+						}
+						
+						quads.push(quad);
+						quad = undefined;
+						
+					}
+					
+					mask[x][y][z][p] = false;
+					
+					
+				}
+				if (quad != undefined){
+					quads.push(quad);
+					quad = undefined;
+				}
+			}
+		}
+	}
+	
+	// convert the list of quads to vertex attributes
+	for (var i = 0; i < quads.length; i++) {
+		var current_ind = [face_vertex_ind[quads[i].n][0], face_vertex_ind[quads[i].n][1], face_vertex_ind[quads[i].n][2], face_vertex_ind[quads[i].n][0], face_vertex_ind[quads[i].n][2], face_vertex_ind[quads[i].n][3]];
+		
+		var offset = [];
+		for(var k = 0; k < 6; k++){
+			offset[k] = [vertices[current_ind[k]][0], vertices[current_ind[k]][1], vertices[current_ind[k]][2], vertices[current_ind[k]][3]];
+		}
+		
+		
+		switch (quads[i].n){
+			case 0:
+				offset[0][1] += quads[i].w-1;
+				offset[3][1] += quads[i].w-1;
+				offset[5][1] += quads[i].w-1;
+				offset[0][2] += quads[i].h-1;
+				offset[1][2] += quads[i].h-1;
+				offset[3][2] += quads[i].h-1;
+				break;
+			case 1:
+				offset[0][1] += quads[i].w-1;
+				offset[3][1] += quads[i].w-1;
+				offset[5][1] += quads[i].w-1;
+				offset[0][2] -= quads[i].h-1;
+				offset[1][2] -= quads[i].h-1;
+				offset[3][2] -= quads[i].h-1;
+				break;
+			case 2:
+				offset[0][0] += quads[i].w-1;
+				offset[3][0] += quads[i].w-1;
+				offset[5][0] += quads[i].w-1;
+				offset[2][2] += quads[i].h-1;
+				offset[4][2] += quads[i].h-1;
+				offset[5][2] += quads[i].h-1;
+				break;
+			case 3:
+				offset[0][2] += quads[i].w-1;
+				offset[1][2] += quads[i].w-1;
+				offset[3][2] += quads[i].w-1;
+				offset[2][0] -= quads[i].h-1;
+				offset[4][0] -= quads[i].h-1;
+				offset[1][0] -= quads[i].h-1;
+				break;
+			case 4:
+				offset[0][1] += quads[i].w-1;
+				offset[3][1] += quads[i].w-1;
+				offset[5][1] += quads[i].w-1;
+				offset[2][0] += quads[i].h-1;
+				offset[4][0] += quads[i].h-1;
+				offset[5][0] += quads[i].h-1;
+				break;
+			case 5:
+				offset[1][1] += quads[i].w-1;
+				offset[2][1] += quads[i].w-1;
+				offset[4][1] += quads[i].w-1;
+				offset[0][0] -= quads[i].h-1;
+				offset[1][0] -= quads[i].h-1;
+				offset[3][0] -= quads[i].h-1;
+				break;
+		}
+		
+		for(var q = 0; q < 6; q++){ // six vertices to make two triangles to make a voxel face
+			var pos = [];
+			
+			pos[0] = quads[i].x + offset[q][0] + chunkPosition[0]*CHUNK_SIZE;
+			pos[1] = quads[i].y + offset[q][1] + chunkPosition[1]*CHUNK_SIZE;
+			pos[2] = quads[i].z + offset[q][2] + chunkPosition[2]*CHUNK_SIZE;
+			pos[3] = 1;
+			
+			points.push(pos);
+			normals.push(std_normals[quads[i].n]);
+			colors.push(normalize([quads[i].x,quads[i].y,quads[i].z,1]));
+			
+		}
+	}
+	
+}
+
+
+function Quad(x, y, z, w, h, n, type){
+	
+	return {
+		
+		x:x, // x coordinate
+		y:y, // y coordinate
+		z:z, // z coordinate
+		w:w, // width
+		h:h, // height
+		n:n, // normal index (0 for +x, 1 for -x, 2 for +y, etc...)
+		type:type, // voxel type
+		add: addQuad,
+		compare: function(otherQuad){ return compareQuads(this, otherQuad); } // compare to another quad according a defined total ordering
+		
+	}
+	
+}
+
+// add a quad to this quad
+// returns true on success
+// false on failure (quads not aligned or incompatible sizes)
+function addQuad (q2){
+	if (q2 == undefined) return false;
+	if (this.n != q2.n) return false;
+	
+	switch(this.n){
+		case 0:
+			if (this.z+this.h == q2.z		 && this.w == q2.w && this.y == q2.y) { // q2 is above
+				this.h += q2.h;
+				return true;
+			
+			} else if (this.z == q2.z+q2.h	 && this.w == q2.w && this.y == q2.y) { // q2 is below,
+				this.h += q2.h;
+				this.z = q2.z;
+				return true;
+			
+			} else if (this.y == q2.y+q2.w 	 && this.h == q2.h && this.z == q2.z) { // q2 is left,
+				this.w += q2.w;
+				this.y = q2.y;
+				return true;
+			
+			} else if (this.y+this.w == q2.y && this.h == q2.h && this.z == q2.z) { // q2 is right,
+				this.w += q2.w;
+				return true;
+			}
+			break;
+		case 1:
+			if (this.z+this.h == q2.z		 && this.w == q2.w && this.y == q2.y) { // q2 is above
+				this.h += q2.h;
+				return true;
+			
+			} else if (this.z == q2.z+q2.h	 && this.w == q2.w && this.y == q2.y) { // q2 is below,
+				this.h += q2.h;
+				this.z = q2.z;
+				return true;
+			
+			} else if (this.y == q2.y+q2.w 	 && this.h == q2.h && this.z == q2.z) { // q2 is left,
+				this.w += q2.w;
+				this.y = q2.y;
+				return true;
+			
+			} else if (this.y+this.w == q2.y && this.h == q2.h && this.z == q2.z) { // q2 is right,
+				this.w += q2.w;
+				return true;
+			}
+			break;
+		case 2:
+			if (this.x+this.w == q2.x		 && this.h == q2.h && this.z == q2.z) { // q2 is above
+				this.w += q2.w;
+				return true;
+			
+			} else if (this.x == q2.x+q2.w	 && this.h == q2.h && this.z == q2.z) { // q2 is below,
+				this.w += q2.w;
+				this.z = q2.z;
+				return true;
+			
+			} else if (this.z == q2.z+q2.w 	 && this.h == q2.h && this.x == q2.x) { // q2 is left,
+				this.h += q2.h;
+				this.x = q2.x;
+				return true;
+			
+			} else if (this.z+this.w == q2.z && this.h == q2.h && this.x == q2.x) { // q2 is right,
+				this.h += q2.h;
+				return true;
+			}
+			break;
+		case 3:
+			if (this.x+this.h == q2.x		 && this.w == q2.w && this.z == q2.z) { // q2 is above
+				this.h += q2.h;
+				return true;
+			
+			} else if (this.x == q2.x+q2.h	 && this.w == q2.w && this.z == q2.z) { // q2 is below,
+				this.h += q2.h;
+				this.x = q2.x;
+				return true;
+			
+			} else if (this.z == q2.z+q2.w 	 && this.h == q2.h && this.x == q2.x) { // q2 is left,
+				this.w += q2.w;
+				this.z = q2.z;
+				return true;
+			
+			} else if (this.z+this.w == q2.z && this.h == q2.h && this.x == q2.x) { // q2 is right,
+				this.w += q2.w;
+				return true;
+			}
+			break;
+		case 4:
+			if (this.x+this.h == q2.x		 && this.w == q2.w && this.y == q2.y) { // q2 is above
+				this.h += q2.h;
+				return true;
+			
+			} else if (this.x == q2.x+q2.h	 && this.w == q2.w && this.y == q2.y) { // q2 is below,
+				this.h += q2.h;
+				this.x = q2.x;
+				return true;
+			
+			} else if (this.y == q2.y+q2.w 	 && this.h == q2.h && this.x == q2.x) { // q2 is left,
+				this.w += q2.w;
+				this.y = q2.y;
+				return true;
+			
+			} else if (this.y+this.w == q2.y && this.h == q2.h && this.x == q2.x) { // q2 is right,
+				this.w += q2.w;
+				return true;
+			}
+			break;
+		case 5:
+			if (this.x+this.h == q2.x		 && this.w == q2.w && this.y == q2.y) { // q2 is above
+				this.h += q2.h;
+				return true;
+			
+			} else if (this.x == q2.x+q2.h	 && this.w == q2.w && this.y == q2.y) { // q2 is below,
+				this.h += q2.h;
+				this.x = q2.x;
+				return true;
+			
+			} else if (this.y == q2.y+q2.w 	 && this.h == q2.h && this.x == q2.x) { // q2 is left,
+				this.w += q2.w;
+				this.y = q2.y;
+				return true;
+			
+			} else if (this.y+this.w == q2.y && this.h == q2.h && this.x == q2.x) { // q2 is right,
+				this.w += q2.w;
+				return true;
+			}
+			break;
+	}
+	
+	return false;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* DEPRECATED AS FUCK, DON'T USE */
 // Default mesher function
-var DefaultMesher = function (voxels, chunkPosition){
+var DefaultMesher_OLD = function (voxels, chunkPosition){
 	
 	// reset vertex buffer arrays
 	var points = [];
 	var colors = [];
 	var normals = [];
 	
-	var checkForFullChunkFace = [false, false, false, false, false, false];
-	this.flags["fullChunkFaces"] = [true, true, true, true, true, true];
-	
-	// used to check voxels in neighbouring chunks
-	//var neighbourChunks = [];
-	//neighbourChunks[0] = chunks[chunkPosition[0]+1,chunkPosition[1],chunkPosition[2]];
-	//neighbourChunks[1] = chunks[chunkPosition[0]-1,chunkPosition[1],chunkPosition[2]];
-	//neighbourChunks[2] = chunks[chunkPosition[0],chunkPosition[1]+1,chunkPosition[2]];
-	//neighbourChunks[3] = chunks[chunkPosition[0],chunkPosition[1]-1,chunkPosition[2]];
-	//neighbourChunks[4] = chunks[chunkPosition[0],chunkPosition[1],chunkPosition[2]+1];
-	//neighbourChunks[5] = chunks[chunkPosition[0],chunkPosition[1],chunkPosition[2]-1];
-	
 	for(var i = 0; i < CHUNK_SIZE; i++) {
-		
-		if (i == 0) checkForFullChunkFace[0] = true;
-		else checkForFullChunkFace[0] = false;
-		if (i == CHUNK_SIZE-1) checkForFullChunkFace[1] = true;
-		else checkForFullChunkFace[1] = false;
 		
 		for(var j = 0; j < CHUNK_SIZE; j++) {
 			
-			if (j == 0)	checkForFullChunkFace[2] = true;
-			else checkForFullChunkFace[2] = false;
-			if (j == CHUNK_SIZE-1) checkForFullChunkFace[3] = true;
-			else checkForFullChunkFace[3] = false;
-			
 			for(var k = 0; k < CHUNK_SIZE; k++) {
-				
-				if (k == 0) checkForFullChunkFace[4] = true;
-				else checkForFullChunkFace[4] = false;
-				if (k == CHUNK_SIZE-1) checkForFullChunkFace[5] = true;
-				else checkForFullChunkFace[5] = false;
 				
 				// is the block empty?
 				if (voxels[i][j][k] != VOXEL_TYPES.DEFAULT){
@@ -99,34 +576,12 @@ var DefaultMesher = function (voxels, chunkPosition){
 					shouldDraw[4] = (k+1 >= CHUNK_SIZE	|| voxels[i][j][k+1] == VOXEL_TYPES.DEFAULT);
 					shouldDraw[5] = (k-1 < 0			|| voxels[i][j][k-1] == VOXEL_TYPES.DEFAULT);
 					
-					//check if voxels at the border have neighbours in neighbouring chunks
-					//if (neighbourChunks[0] != undefined && neighbourChunks[0].isLoaded && neighbourChunks[0].isSetup && shouldDraw[0] && i+1 >= CHUNK_SIZE) shouldDraw[0] = neighbourChunks[0].voxels[0][j][k] 				== VOXEL_TYPES.DEFAULT;
-					//if (neighbourChunks[1] != undefined && neighbourChunks[1].isLoaded && neighbourChunks[1].isSetup && shouldDraw[1] && i-1 < 0) 			shouldDraw[1] = neighbourChunks[1].voxels[CHUNK_SIZE-1][j][k]	== VOXEL_TYPES.DEFAULT;
-					//if (neighbourChunks[2] != undefined && neighbourChunks[2].isLoaded && neighbourChunks[2].isSetup && shouldDraw[2] && j+1 >= CHUNK_SIZE) shouldDraw[2] = neighbourChunks[2].voxels[i][0][k] 				== VOXEL_TYPES.DEFAULT;
-					//if (neighbourChunks[3] != undefined && neighbourChunks[3].isLoaded && neighbourChunks[3].isSetup && shouldDraw[3] && j-1 < 0) 			shouldDraw[3] = neighbourChunks[3].voxels[i][CHUNK_SIZE-1][k]	== VOXEL_TYPES.DEFAULT;
-					//if (neighbourChunks[4] != undefined && neighbourChunks[4].isLoaded && neighbourChunks[4].isSetup && shouldDraw[4] && k+1 >= CHUNK_SIZE) shouldDraw[4] = neighbourChunks[4].voxels[i][j][0] 				== VOXEL_TYPES.DEFAULT;
-					//if (neighbourChunks[5] != undefined && neighbourChunks[5].isLoaded && neighbourChunks[5].isSetup && shouldDraw[5] && k-1 < 0) 			shouldDraw[5] = neighbourChunks[5].voxels[i][j][CHUNK_SIZE-1]	== VOXEL_TYPES.DEFAULT;
-					
-					
 					createCube([i,j,k], shouldDraw);
-					
-				} else {
-					
-					// set flag indicating if the chunk face is full
-					if (checkForFullChunkFace[0]) this.flags["fullChunkFaces"][0] = false;
-					if (checkForFullChunkFace[1]) this.flags["fullChunkFaces"][1] = false;
-					if (checkForFullChunkFace[2]) this.flags["fullChunkFaces"][2] = false;
-					if (checkForFullChunkFace[3]) this.flags["fullChunkFaces"][3] = false;
-					if (checkForFullChunkFace[4]) this.flags["fullChunkFaces"][4] = false;
-					if (checkForFullChunkFace[5]) this.flags["fullChunkFaces"][5] = false;
 					
 				}
 			}
 		}
 	}
-	
-	// Check if we created any voxels
-	this.flags["isEmpty"] = points.length == 0;
 	
 	
 	function createCube(blockPosition, shouldDraw) {
@@ -161,8 +616,8 @@ var DefaultMesher = function (voxels, chunkPosition){
 	}
 	
 	// set the vertex buffers and vertex attributes
-	this.vertexBuffers.push(new vertextAttributeObject("vPosition"), new vertextAttributeObject("vColor"), new vertextAttributeObject("vNormal"));
-	this.vertexAttrValues.push(points, colors, normals);
+	this.vertexBuffers = [new vertextAttributeObject("vPosition", 4), new vertextAttributeObject("vColor", 4), new vertextAttributeObject("vNormal", 4)];
+	this.vertexAttrValues = [points, colors, normals];
 	
 }
 

@@ -155,6 +155,7 @@ function WorldManager(gl, shaderProgram, fCam){
 										||	(i == 4 && isSetup && thisChunk.fullChunkFaces[5] != undefined && !thisChunk.fullChunkFaces[5]) // 
 										||	(i == 5 && isSetup && thisChunk.fullChunkFaces[4] != undefined && !thisChunk.fullChunkFaces[4]) // 
 									)
+									&& ( !thisChunk.isEmpty ) // Don't load empty chunks in the air - WARNING: This prevents floating islands with 1 or more empty chunks between already-loaded terrain! REALLY good for memory though... - halves number of loaded chunks
 							){
 								chunkLoadList.push(e); // add the coordinates for loading if the test is passed
 							}
@@ -239,11 +240,19 @@ function Chunk(chunkPosition, chunks){
 		
 		// Create the mesh
 		Mesh.CreateMesh = Mesher;
+		
+		
+		counter = 0;
+		var then = Date.now();
 		Mesh.CreateMesh(voxels, chunkPosition);
+		var now = Date.now();
+		counter += now-then;
+		console.log("Total time spent on mesh creation: " + counter);
+		
+		
+		
 		vertexAttrValues	= Mesh.vertexAttrValues;
 		vertexBuffers 		= Mesh.vertexBuffers;
-		this.isEmpty 		= Mesh.flags["isEmpty"];
-		this.fullChunkFaces = Mesh.flags["fullChunkFaces"];
 		
 		// transfer the attributes to the GPU
 		TransferVertexAttributes(shaderProgram, vertexBuffers, vertexAttrValues);
@@ -265,14 +274,14 @@ function Chunk(chunkPosition, chunks){
 	
 	function Unload(){
 		
-		var chunkPosition = null; // coordinates of the chunk offset (vec2)
-		var voxels = null;
+		this.chunkPosition = null; // coordinates of the chunk offset (vec2)
+		this.voxels = null;
 		
 		// information variables
-		var needsRebuild = null;
-		var isSetup = null;
-		var isEmpty = null;
-		var fullChunkFaces = null; // booleans used to not render completely surrounded chunks
+		this.needsRebuild = null;
+		this.isSetup = null;
+		this.isEmpty = null;
+		this.fullChunkFaces = null; // booleans used to not render completely surrounded chunks
 		
 	}
 	
@@ -281,18 +290,58 @@ function Chunk(chunkPosition, chunks){
 		// Get chunk coord in world coordinates
 		var chunkWorldCoords = chunkCoordsToWorldCoords(chunkPosition);
 		
+		// initiate relevant chunk flags
+		this.isEmpty = true;
+		this.needsRebuild = false;
+		this.fullChunkFaces = [true, true, true, true, true, true];
+		this.isSetup = true;
+		
+		// used for setting the fullChunkFaces flag correctly below
+		var checkForFullChunkFace = [false, false, false, false, false, false];
+	
 		// Generate empty voxels throughout the chunk - replace with some more interesting world gen later
 		for(var i = 0; i < CHUNK_SIZE; i++) {
 			voxels[i] = [];
+			
+			if (i == 0) checkForFullChunkFace[0] = true;
+			else checkForFullChunkFace[0] = false;
+			if (i == CHUNK_SIZE-1) checkForFullChunkFace[1] = true;
+			else checkForFullChunkFace[1] = false;
+			
 			for(var j = 0; j < CHUNK_SIZE; j++) {
 				voxels[i][j] = [];
+				
+				if (j == 0)	checkForFullChunkFace[2] = true;
+				else checkForFullChunkFace[2] = false;
+				if (j == CHUNK_SIZE-1) checkForFullChunkFace[3] = true;
+				else checkForFullChunkFace[3] = false;
+				
 				for(var k = 0; k < CHUNK_SIZE; k++) {
+					
+					if (k == 0) checkForFullChunkFace[4] = true;
+					else checkForFullChunkFace[4] = false;
+					if (k == CHUNK_SIZE-1) checkForFullChunkFace[5] = true;
+					else checkForFullChunkFace[5] = false;
+					
 					voxels[i][j][k] = VoxelGenerator(i+chunkWorldCoords[0], j+chunkWorldCoords[1], k+chunkWorldCoords[2]);
+					
+					// set flags
+					if (voxels[i][j][k] != VOXEL_TYPES.DEFAULT) {
+						this.isEmpty = false;
+						this.needsRebuild = true;
+					} else {
+						// set flag indicating if the chunk face is full (used to chunk loading)
+						if (checkForFullChunkFace[0]) this.fullChunkFaces[0] = false;
+						if (checkForFullChunkFace[1]) this.fullChunkFaces[1] = false;
+						if (checkForFullChunkFace[2]) this.fullChunkFaces[2] = false;
+						if (checkForFullChunkFace[3]) this.fullChunkFaces[3] = false;
+						if (checkForFullChunkFace[4]) this.fullChunkFaces[4] = false;
+						if (checkForFullChunkFace[5]) this.fullChunkFaces[5] = false;
+					}
+					
 				}
 			}
 		}
-		this.isEmpty = false;
-		this.isSetup = true;
 		
 	}
 	

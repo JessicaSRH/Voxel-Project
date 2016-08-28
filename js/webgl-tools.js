@@ -22,10 +22,11 @@
 
 
 // object used to handle vertex attributes
-function vertextAttributeObject(attrName_){
+function vertextAttributeObject(attrName_, size){
 	
 	const attrName = attrName_;
 	var length = 0;
+	var size = size;
 	
 	const vBuffer = gl.createBuffer();
 	var vBufferLoc;
@@ -36,7 +37,8 @@ function vertextAttributeObject(attrName_){
 		gl.bufferData( gl.ARRAY_BUFFER, flatten(attrValues), gl.STATIC_DRAW );
 		
 		vBufferLoc = gl.getAttribLocation( shaderProgram, attrName );
-		gl.vertexAttribPointer( vBufferLoc, 4, gl.FLOAT, false, 0, 0 );
+		console.log(attrName);
+		gl.vertexAttribPointer( vBufferLoc, size, gl.FLOAT, false, 0, 0 );
 		gl.enableVertexAttribArray( vBufferLoc );
 		
 		this.length = attrValues.length;
@@ -44,10 +46,9 @@ function vertextAttributeObject(attrName_){
 	}
 	
 	function Enable(shaderProgram){ // call before rendering to enable the appropriate buffer objects
-		
 		// Re-associate this chunks vertex buffer with the shader program
 		gl.bindBuffer( gl.ARRAY_BUFFER, vBuffer );
-		gl.vertexAttribPointer( vBufferLoc, 4, gl.FLOAT, false, 0, 0 );
+		gl.vertexAttribPointer( vBufferLoc, size, gl.FLOAT, false, 0, 0 );
 		gl.enableVertexAttribArray( vBufferLoc );
 		
 	}
@@ -104,6 +105,9 @@ const UNIFORM_TYPE = {
 	INT_4			: function(uniformLoc, value){ gl.uniform4i(uniformLoc, value[0], value[1], value[2], value[3]) },
 }
 
+const ATTRIBUTE_TYPE = {
+	
+}
 
 // transfer uniforms
 function TransferUniforms(shaderProgram, uniformObjects, uniformValues){

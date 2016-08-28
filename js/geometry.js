@@ -40,7 +40,16 @@ function Plane(p0, p1, p2){
 		return [s*n[0], s*n[1], s*n[2]];
 	}
 	
+	function equals(otherPlane){
+		if (otherPlane.n[0] != this.n[0]) return false;
+		if (otherPlane.n[1] != this.n[1]) return false;
+		if (otherPlane.n[2] != this.n[2]) return false;
+		return otherPlane.D == this.D;
+	}
+	
 	return {
+		n:n,
+		D:D,
 		distance:distance,
 		project:project
 	}
@@ -59,6 +68,25 @@ var vertices = [
 	[ 0.5, -0.5, -0.5, 1.0 ]  // 7 - r, b, b
 ];
 
+// indices used to index into the vertices array (above) for each face of a voxel (so using e.g. vertex 2, 3, 7 and 6 will result in a voxel face with a normal in the +x direction)
+	var face_vertex_ind = [
+		[2, 3, 7, 6], 
+		[5, 4, 0, 1], 
+		[6, 5, 1, 2], 
+		[3, 0, 4, 7], 
+		[1, 0, 3, 2], 
+		[4, 5, 6, 7]
+	];
+
+// normals for the cubes
+var std_normals = [
+	[ 1,  0,  0, 0],
+	[-1,  0,  0, 0],
+	[ 0,  1,  0, 0],
+	[ 0, -1,  0, 0],
+	[ 0,  0,  1, 0],
+	[ 0,  0, -1, 0]
+];
 
 
 function getNormal(p1,p2,p3){

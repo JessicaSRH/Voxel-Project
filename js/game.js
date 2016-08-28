@@ -22,6 +22,7 @@
 
 TODO list:
 	
+	Chunk loading - multithreading (gonna be SUPER dope in combination with the greedy mesher)
 	Chunk rendering: Only render visible chunks (occlusion culling)
 	
 	Perlin noise implementation:
@@ -106,9 +107,9 @@ var World;
 var MAX_CHUNKS_PER_FRAME = 1; // the maximum number of chunks to load per frame
 const CHUNK_SIZE = 32; // number of voxels in each chunk
 
-var CHUNK_LOAD_RADIUS = 25; // Square of the distance at which new chunks should load
+var CHUNK_LOAD_RADIUS = 1; // Square of the distance at which new chunks should load
 var CHUNK_UNLOAD_RADIUS = 49; // Square of the distance at which chunks should unload
-var CHUNK_FORCE_LOAD_RADIUS = 2; // Square of the distance at which chunk voxels will be forced to setup
+var CHUNK_FORCE_LOAD_RADIUS = 1; // Square of the distance at which chunk voxels will be forced to setup
 
 // Perlin noise generator
 var Perlin = new SimplexNoise();
@@ -132,16 +133,16 @@ window.onload = function(e){
 	canvas.height = window.innerHeight;
 	
 	// Initial camera settings 
-	var initial_eye = [CHUNK_SIZE-1, 30, CHUNK_SIZE-1];
-	var initial_at 	= [CHUNK_SIZE-1, 30, CHUNK_SIZE-2];
+	var initial_eye = [CHUNK_SIZE-1, 0, CHUNK_SIZE-1];
+	var initial_at 	= [CHUNK_SIZE-1, 0, CHUNK_SIZE-2];
 	var initial_up	= [0, 1, 0];
 	var initial_fovy 	= 70;
 	var initial_near 	= 0.01;
 	var initial_far 	= 400;
 	var initial_aspect = canvas.width/canvas.height;
 	
-	var frustum_eye = [CHUNK_SIZE-1, 30, CHUNK_SIZE-1];
-	var frustum_at 	= [CHUNK_SIZE-1, 30, CHUNK_SIZE-2];
+	var frustum_eye = [CHUNK_SIZE-1, 0, CHUNK_SIZE-1];
+	var frustum_at 	= [CHUNK_SIZE-1, 0, CHUNK_SIZE-2];
 	var frustum_up	= [0, 1, 0];
 	var frustum_fovy 	= initial_fovy;
 	var frustum_near 	= initial_near;

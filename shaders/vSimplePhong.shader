@@ -6,6 +6,10 @@ precision mediump float;
 attribute vec4 vPosition;
 attribute vec4 vColor;
 attribute vec4 vNormal;
+attribute vec3 vAmbientProduct;
+attribute vec3 vDiffuseProduct;
+attribute vec3 vSpecularProduct;
+attribute float vMatShininess;
 
 varying vec4 fColor;
 varying vec4 fNormal;
@@ -13,10 +17,10 @@ varying vec3 L, E, N;
 varying vec4 fPosition;
 varying float attenuation;
 
-varying vec3 diffuseProduct;
-varying vec3 specularProduct;
-varying vec3 ambientProduct;
-varying float matShininess;
+varying vec3 fDiffuseProduct;
+varying vec3 fSpecularProduct;
+varying vec3 fAmbientProduct;
+varying float fMatShininess;
 
 uniform mat4 modelView;
 uniform mat4 projection;
@@ -32,22 +36,11 @@ void main() {
 	lightPosition = vec4(30,25,30,1.0); // light position in world space
 	//lightPosition = vec4(eyePosition,1.0); // set light position to eye
 	
-	mat3 matCoeffs = mat3( // material coefficients
-		0.1, 0.3, 0.1,
-		0.1, 0.9, 0.1,
-		0.1, 0.3, 0.1
-	);
 	
-	mat3 lCoeffs = mat3( // light coefficients
-		0.2, 0.2, 0.2,
-		0.1, 0.3, 0.1,
-		0.1, 0.3, 0.1
-	);
-	
-	diffuseProduct = vec3(0.0, 0.4, 0.0);
-	specularProduct = vec3(0.1, 0.2, 0.1);
-	ambientProduct = vec3(0.1, 0.2, 0.1);
-	matShininess = 10.0;
+	fDiffuseProduct	 = vec3(0.0, 0.4, 0.0);
+	fSpecularProduct = vec3(0.1, 0.2, 0.1);
+	fAmbientProduct	 = vec3(0.1, 0.2, 0.1);
+	fMatShininess	 = 10.0;
 	
 	
 	// Attenuation (calculated in world space, cause that makes sense (although the MV transformation preserves distances, actually... so it doesn't really matter.))

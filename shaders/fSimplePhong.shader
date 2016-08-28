@@ -9,16 +9,12 @@ varying vec4 fNormal;
 varying vec3 L, E, N;
 varying float attenuation;
 
-varying vec3 diffuseProduct;
-varying vec3 specularProduct;
-varying vec3 ambientProduct;
-varying float matShininess;
+varying vec3 fDiffuseProduct;
+varying vec3 fSpecularProduct;
+varying vec3 fAmbientProduct;
+varying float fMatShininess;
 
 void main() {
-	
-	//vec3 diffuseProduct = vec3(0.5, 0.5, 0.4);
-	//vec3 specularProduct = vec3(0.1, 0.1, 0.05);
-	//vec3 ambientProduct = vec3(0.1,0,0);
 	
 	// Normalization on fragment shader essential;
 	//otherwise the interpolation breaks the normalization which creates horrible artefacts along vertex edges
@@ -30,9 +26,10 @@ void main() {
 	vec3 H = normalize(L_ + E_); // 
 	
 	// Compute Phong lighting terms
-	vec3 diffuse  = diffuseProduct * max(dot(L_,N_), 0.0);
-	vec3 specular = specularProduct * pow(max(dot(N_,H), 0.0), matShininess);
+	vec3 diffuse  = fDiffuseProduct * max(dot(L_,N_), 0.0);
+	vec3 specular = fSpecularProduct * pow(max(dot(N_,H), 0.0), fMatShininess);
 	
-	gl_FragColor = vec4(ambientProduct + (diffuse + specular) * attenuation, 1);
+	//gl_FragColor = vec4(ambientProduct + (diffuse + specular) * attenuation, 1);
+	gl_FragColor = vec4(fAmbientProduct + (diffuse + specular) * attenuation, 1);
 	
 }

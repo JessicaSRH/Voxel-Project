@@ -169,7 +169,7 @@ function Frustum(init_eye, init_at, init_up, init_fovy, init_near, init_far, ini
 		for (var i = 0; i < points.length; i++) colors.push([1, 0, 0, 1]);
 		
 		// Create the vertex and uniform objects
-		var vertexBuffers = [new vertextAttributeObject("vPosition"), new vertextAttributeObject("vColor")];
+		var vertexBuffers = [new vertextAttributeObject("vPosition", 4), new vertextAttributeObject("vColor", 4)];
 		var vertexAttrValues = [points, colors];
 		
 		var uniformObjects = [new vertexUniformObject("modelView", UNIFORM_TYPE.MATRIX_4), new vertexUniformObject("projection", UNIFORM_TYPE.MATRIX_4)];
