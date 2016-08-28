@@ -73,24 +73,18 @@ function MeshingHelper(voxels, chunkPosition, MeshingAlgorithm, self){
 	// Compute the mesh
 	MeshingAlgorithm(chunkPosition, mask, points, normals, colors, ambientProducts, diffuseProducts, specularProducts, matShininesses);
 	
-	console.log(points.length);
-	console.log(ambientProducts.length);
-	console.log(diffuseProducts.length);
-	console.log(specularProducts.length);
-	console.log(matShininesses.length);
-	
 	// set the vertex buffers and vertex attributes
 	self.vertexBuffers = [
 		new vertextAttributeObject("vPosition", 4),
 		new vertextAttributeObject("vColor", 4),
-		new vertextAttributeObject("vNormal", 4)/*,
+		new vertextAttributeObject("vNormal", 4),
 		new vertextAttributeObject("vAmbientProduct", 3),
 		new vertextAttributeObject("vDiffuseProduct", 3),
-		new vertextAttributeObject("vSpecularProduc", 3),
-		new vertextAttributeObject("vMatShininess", 1)*/
+		new vertextAttributeObject("vSpecularProduct", 3),
+		new vertextAttributeObject("vMatShininess", 1)/**/
 	];
 	
-	self.vertexAttrValues = [points, colors, normals, ambientProducts];//, diffuseProducts, specularProducts, matShininesses];
+	self.vertexAttrValues = [points, colors, normals, ambientProducts, diffuseProducts, specularProducts, matShininesses];
 	
 }
 
@@ -135,7 +129,7 @@ var NaiveMeshing = function(chunkPosition, mask, points, normals, colors, ambien
 		for(var i = 0; i < CHUNK_SIZE; i++) {
 			for(var j = 0; j < CHUNK_SIZE; j++) {
 				for(var k = 0; k < CHUNK_SIZE; k++) {
-					if(mask[i][j][k][p] == true){
+					if(mask[i][j][k][p] != VOXEL_TYPES.DEFAULT){
 						
 						var t = mask[i][j][k][p];
 						var current_ind = [face_vertex_ind[p][0], face_vertex_ind[p][1], face_vertex_ind[p][2], face_vertex_ind[p][0], face_vertex_ind[p][2], face_vertex_ind[p][3]];

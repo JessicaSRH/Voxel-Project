@@ -37,7 +37,6 @@ function vertextAttributeObject(attrName_, size){
 		gl.bufferData( gl.ARRAY_BUFFER, flatten(attrValues), gl.STATIC_DRAW );
 		
 		vBufferLoc = gl.getAttribLocation( shaderProgram, attrName );
-		console.log(attrName);
 		gl.vertexAttribPointer( vBufferLoc, size, gl.FLOAT, false, 0, 0 );
 		gl.enableVertexAttribArray( vBufferLoc );
 		

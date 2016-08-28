@@ -37,10 +37,10 @@ void main() {
 	//lightPosition = vec4(eyePosition,1.0); // set light position to eye
 	
 	
-	fDiffuseProduct	 = vec3(0.0, 0.4, 0.0);
-	fSpecularProduct = vec3(0.1, 0.2, 0.1);
-	fAmbientProduct	 = vec3(0.1, 0.2, 0.1);
-	fMatShininess	 = 10.0;
+	fAmbientProduct	 = vAmbientProduct;
+	fDiffuseProduct	 = vDiffuseProduct;
+	fSpecularProduct = vSpecularProduct;
+	fMatShininess	 = vMatShininess;
 	
 	
 	// Attenuation (calculated in world space, cause that makes sense (although the MV transformation preserves distances, actually... so it doesn't really matter.))

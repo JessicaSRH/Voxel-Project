@@ -242,12 +242,12 @@ function Chunk(chunkPosition, chunks){
 		Mesh.CreateMesh = Mesher;
 		
 		
-		counter = 0;
-		var then = Date.now();
+		//counter = 0;
+		//var then = Date.now();
 		Mesh.CreateMesh(voxels, chunkPosition);
-		var now = Date.now();
-		counter += now-then;
-		console.log("Total time spent on mesh creation: " + counter);
+		//var now = Date.now();
+		//counter += now-then;
+		//console.log("Total time spent on mesh creation: " + counter);
 		
 		
 		

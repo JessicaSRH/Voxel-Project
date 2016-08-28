@@ -6,14 +6,16 @@
 
 // Cool valley ish terrain thingy
 var ValleyTerrainGenerator = function(x,y,z){
-	return (Perlin.noise(x/200,z/200)*50 < y) ? VOXEL_TYPES.DEFAULT : VOXEL_TYPES.GRASS;
+	var h = Perlin.noise(x/200,z/200)*64;
+	var r = Perlin.noise(x/5,z/5)/2;
 	
+	if (y > h+r) return VOXEL_TYPES.DEFAULT;
+	if (y < h+r) return VOXEL_TYPES.GRASS;
 }
 
 // Cool plans ish terrain thingy
 var PlainsTerrainGenerator = function(x,y,z){
 	return (Perlin.noise(x/200,z/200)*4 < y) ? VOXEL_TYPES.DEFAULT : VOXEL_TYPES.GRASS;
-	
 }
 
 // Cool space world thingy
@@ -29,13 +31,11 @@ var OneSphereGenerator = function(x,y,z){
 	return ((x - (CHUNK_SIZE/2))*(x - (CHUNK_SIZE/2)) + (y - (CHUNK_SIZE/2))*(y - (CHUNK_SIZE/2)) + (z - (CHUNK_SIZE/2))*(z - (CHUNK_SIZE/2)) < (CHUNK_SIZE/2) * (CHUNK_SIZE/2)) ? VOXEL_TYPES.GRASS : VOXEL_TYPES.DEFAULT;
 }
 
-
 // Set the default terrain generator
-var DefaultVoxelGenerator = OneCubeGenerator;
+var DefaultVoxelGenerator = ValleyTerrainGenerator;
 
 // "enum" for block types
 const VOXEL_TYPES = {
-	
 	DEFAULT:	"0", // a 1-character string is the smallest primitive data type in javascript
 	GRASS:		"1",
 	DIRT:		"2",
@@ -43,15 +43,14 @@ const VOXEL_TYPES = {
 	STONE:		"4",
 	WOOD:		"5",
 	SAND:		"6"
-	
 }
 
 // Phong lighting coefficients for each voxel type
 // Indexing: [ r, g, b for ambient,   r, g, b for diffuse,   r, g, b for specular,   shininess ]
 const VOXEL_TYPE_LIGHTING = {};
 VOXEL_TYPE_LIGHTING[VOXEL_TYPES.DEFAULT]	= [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0];
-VOXEL_TYPE_LIGHTING[VOXEL_TYPES.DIRT]		= [0.4, 0.8, 0.4, 0.3, 0.8, 0.3, 0.1, 0.4, 0.1, 50.0];
-VOXEL_TYPE_LIGHTING[VOXEL_TYPES.GRASS]		= [0.54, 0.27, 0.07, 0.54, 0.27, 0.07, 0.54, 0.27, 0.07, 50.0];
+VOXEL_TYPE_LIGHTING[VOXEL_TYPES.GRASS]		= [0.3, 0.8, 0.3, 0.1, 0.4, 0.1, 0.2, 0.4, 0.2, 20.0];
+VOXEL_TYPE_LIGHTING[VOXEL_TYPES.DIRT]		= [0.38, 0.25, 0.07, 0.38, 0.25, 0.07, 0.38, 0.25, 0.07, 20.0];
 VOXEL_TYPE_LIGHTING[VOXEL_TYPES.WATER]		= [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0];
 VOXEL_TYPE_LIGHTING[VOXEL_TYPES.STONE]		= [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0];
 VOXEL_TYPE_LIGHTING[VOXEL_TYPES.WOOD]		= [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0];
