@@ -206,74 +206,28 @@ var GreedyMeshing = function(chunkPosition, mask, points, normals, colors, ambie
 							break;
 					}
 					
-					if(mask[x][y][z][p] && quad == undefined) { // start creating new quad
+					if(mask[x][y][z][p] != false && quad == undefined) { // start creating new quad
 						
 						quad = new Quad(x, y, z, 1, 1, p, mask[x][y][z][p]);
 						
-					} else if (quad != undefined && mask[x][y][z][p] == quad.type) { // expand horizontally (OMG IT'S ACTUALLY WORKING.)
+					} else if (mask[x][y][z][p] != false && quad != undefined) { // expand horizontally (OMG IT'S ACTUALLY WORKING.)
 						
-						quad.add(new Quad(x, y, z, 1, 1, p, mask[x][y][z][p]));
+						var newQuad = new Quad(x, y, z, 1, 1, p, mask[x][y][z][p]);
+						var wasAdded = quad.add(newQuad);
+						
+						if (!wasAdded){
+							quad = expandQuadVertically(x, y, z, p, quad, quads, mask);
+							quads.push(quad);
+							quad = newQuad;
+						}
 						
 					}
 					
 					
 					if ((!mask[x][y][z][p] || k == CHUNK_SIZE - 1) && quad != undefined) { // expand vertically
-						var canExpandVertically = true;
-						var v_index = 1;
-						while(canExpandVertically){
-							for(var w = 0; w < quad.w; w++){
-								switch(p){
-									case 0:
-										canExpandVertically = canExpandVertically && quad.z+v_index < CHUNK_SIZE && mask[x][quad.y+w][quad.z+v_index][p] == quad.type;
-										break;
-									case 1:
-										canExpandVertically = canExpandVertically && quad.z-v_index >= 0 && mask[x][quad.y+w][quad.z-v_index][p] == quad.type;
-										break;
-									case 2:
-										canExpandVertically = canExpandVertically && quad.z+v_index < CHUNK_SIZE && mask[quad.x+w][y][quad.z+v_index][p] == quad.type;
-										break;
-									case 3:
-										canExpandVertically = canExpandVertically && quad.x-v_index >= 0 && mask[quad.x-v_index][y][quad.z+w][p] == quad.type;
-										break;
-									case 4:
-										canExpandVertically = canExpandVertically && quad.x+v_index < CHUNK_SIZE && mask[quad.x+v_index][quad.y+w][z][p] == quad.type;
-										break;
-									case 5:
-										canExpandVertically = canExpandVertically && quad.x-v_index >= 0 && mask[quad.x-v_index][quad.y+w][z][p] == quad.type;
-										break;
-								}
-							}
-							if(canExpandVertically) {
-								for(var w = 0; w < quad.w; w++){
-									switch(p){
-										case 0:
-											mask[x][quad.y+w][quad.z+v_index][p] = false;
-											break;
-										case 1:
-											mask[x][quad.y+w][quad.z-v_index][p] = false;
-											break;
-										case 2:
-											mask[quad.x+w][y][quad.z+v_index][p] = false;
-											break;
-										case 3:
-											mask[quad.x-v_index][y][quad.z+w][p] = false;
-											break;
-										case 4:
-											mask[quad.x+v_index][quad.y+w][z][p] = false;
-											break;
-										case 5:
-											mask[quad.x-v_index][quad.y+w][z][p] = false;
-											break;
-									}
-								}
-								quad.h += 1;
-							}
-							v_index++;
-						}
-						
+						quad = expandQuadVertically(x, y, z, p, quad, quads, mask);
 						quads.push(quad);
 						quad = undefined;
-						
 					}
 					
 					mask[x][y][z][p] = false;
@@ -349,6 +303,8 @@ var GreedyMeshing = function(chunkPosition, mask, points, normals, colors, ambie
 				break;
 		}
 		
+		var t = quads[i].type;
+		
 		for(var q = 0; q < 6; q++){ // six vertices to make two triangles to make a voxel face
 			var pos = [];
 			
@@ -360,7 +316,10 @@ var GreedyMeshing = function(chunkPosition, mask, points, normals, colors, ambie
 			points.push(pos);
 			normals.push(std_normals[quads[i].n]);
 			colors.push(normalize([quads[i].x,quads[i].y,quads[i].z,1]));
-			
+			ambientProducts.push(	[SUN_LIGHT_COEFFS[0]*VOXEL_TYPE_LIGHTING[t][0], SUN_LIGHT_COEFFS[1]*VOXEL_TYPE_LIGHTING[t][1], SUN_LIGHT_COEFFS[2]*VOXEL_TYPE_LIGHTING[t][2]]);
+			diffuseProducts.push(	[SUN_LIGHT_COEFFS[3]*VOXEL_TYPE_LIGHTING[t][3], SUN_LIGHT_COEFFS[4]*VOXEL_TYPE_LIGHTING[t][4], SUN_LIGHT_COEFFS[5]*VOXEL_TYPE_LIGHTING[t][5]]);
+			specularProducts.push(	[SUN_LIGHT_COEFFS[6]*VOXEL_TYPE_LIGHTING[t][6], SUN_LIGHT_COEFFS[7]*VOXEL_TYPE_LIGHTING[t][7], SUN_LIGHT_COEFFS[8]*VOXEL_TYPE_LIGHTING[t][8]]);
+			matShininesses.push(VOXEL_TYPE_LIGHTING[t][9]);
 		}
 	}
 	
@@ -385,12 +344,75 @@ function Quad(x, y, z, w, h, n, type){
 	
 }
 
+
+function expandQuadVertically(x, y, z, p, quad, quads, mask){
+	
+	var canExpandVertically = true;
+	var v_index = 1;
+	while(canExpandVertically){
+		for(var w = 0; w < quad.w; w++){
+			switch(p){
+				case 0:
+					canExpandVertically = canExpandVertically && quad.z+v_index < CHUNK_SIZE && mask[x][quad.y+w][quad.z+v_index][p] == quad.type;
+					break;
+				case 1:
+					canExpandVertically = canExpandVertically && quad.z-v_index >= 0 && mask[x][quad.y+w][quad.z-v_index][p] == quad.type;
+					break;
+				case 2:
+					canExpandVertically = canExpandVertically && quad.z+v_index < CHUNK_SIZE && mask[quad.x+w][y][quad.z+v_index][p] == quad.type;
+					break;
+				case 3:
+					canExpandVertically = canExpandVertically && quad.x-v_index >= 0 && mask[quad.x-v_index][y][quad.z+w][p] == quad.type;
+					break;
+				case 4:
+					canExpandVertically = canExpandVertically && quad.x+v_index < CHUNK_SIZE && mask[quad.x+v_index][quad.y+w][z][p] == quad.type;
+					break;
+				case 5:
+					canExpandVertically = canExpandVertically && quad.x-v_index >= 0 && mask[quad.x-v_index][quad.y+w][z][p] == quad.type;
+					break;
+			}
+		}
+		if(canExpandVertically) {
+			for(var w = 0; w < quad.w; w++){
+				switch(p){
+					case 0:
+						mask[x][quad.y+w][quad.z+v_index][p] = false;
+						break;
+					case 1:
+						mask[x][quad.y+w][quad.z-v_index][p] = false;
+						break;
+					case 2:
+						mask[quad.x+w][y][quad.z+v_index][p] = false;
+						break;
+					case 3:
+						mask[quad.x-v_index][y][quad.z+w][p] = false;
+						break;
+					case 4:
+						mask[quad.x+v_index][quad.y+w][z][p] = false;
+						break;
+					case 5:
+						mask[quad.x-v_index][quad.y+w][z][p] = false;
+						break;
+				}
+			}
+			quad.h += 1;
+		}
+		v_index++;
+	}
+	
+	return quad;
+	
+}
+
+
+
 // add a quad to this quad
 // returns true on success
 // false on failure (quads not aligned or incompatible sizes)
 function addQuad (q2){
 	if (q2 == undefined) return false;
 	if (this.n != q2.n) return false;
+	if (this.type != q2.type) return false;
 	
 	switch(this.n){
 		case 0:

@@ -44,10 +44,10 @@ function WorldManager(gl, shaderProgram, fCam){
 	var frustumCam = fCam;
 	
 	// The mesher
-	var Mesher = DefaultMesher;
+	var Mesher = GreedyMesher;
 	
 	//The voxel generator
-	var VoxelGenerator = DefaultVoxelGenerator;
+	var VoxelGenerator = DefaultVoxelGenerator(worldSeed);
 	
 	
 	function UpdateChunkLoadList(self){
@@ -323,7 +323,7 @@ function Chunk(chunkPosition, chunks){
 					if (k == CHUNK_SIZE-1) checkForFullChunkFace[5] = true;
 					else checkForFullChunkFace[5] = false;
 					
-					voxels[i][j][k] = VoxelGenerator(i+chunkWorldCoords[0], j+chunkWorldCoords[1], k+chunkWorldCoords[2]);
+					voxels[i][j][k] = VoxelGenerator.get(i+chunkWorldCoords[0], j+chunkWorldCoords[1], k+chunkWorldCoords[2]);
 					
 					// set flags
 					if (voxels[i][j][k] != VOXEL_TYPES.DEFAULT) {

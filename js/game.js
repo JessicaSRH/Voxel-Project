@@ -62,6 +62,7 @@ var shaderProgram; // main shader program
 var renderMode; // render mode (e.g. gl.LINES, gl.TRIANGLES)
 
 // world settings
+var worldSeed = "hello."
 var worldSizeX = 50;
 var worldSizeY = 50;
 var worldSizeZ = 50;
@@ -107,12 +108,12 @@ var World;
 var MAX_CHUNKS_PER_FRAME = 1; // the maximum number of chunks to load per frame
 const CHUNK_SIZE = 32; // number of voxels in each chunk
 
-var CHUNK_LOAD_RADIUS = 25; // Square of the distance at which new chunks should load
-var CHUNK_UNLOAD_RADIUS = 49; // Square of the distance at which chunks should unload
+var CHUNK_LOAD_RADIUS = 10; // Square of the distance at which new chunks should load
+var CHUNK_UNLOAD_RADIUS = 25; // Square of the distance at which chunks should unload
 var CHUNK_FORCE_LOAD_RADIUS = 1; // Square of the distance at which chunk voxels will be forced to setup
 
 // Perlin noise generator
-var Perlin = new SimplexNoise();
+var Perlin;
 
 // Debugging counter
 var counter = 0;
