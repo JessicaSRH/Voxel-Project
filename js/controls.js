@@ -409,10 +409,10 @@ function NormalControls (camera) {
 	function mousedownCallback(event) {
 		// pointer is locked
 		if (document.pointerLockElement === canvas ||
-		document.mozPointerLockElement === canvas ||
-		document.webkitPointerLockElement === canvas)
+			document.mozPointerLockElement === canvas ||
+			document.webkitPointerLockElement === canvas)
 		{
-			
+			console.log("qwe");
 		} else {
 			// We need to lock the pointer
 			canvas.requestPointerLock =

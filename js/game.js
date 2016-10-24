@@ -26,8 +26,7 @@ TODO list:
 	Chunk rendering: Only render visible chunks (occlusion culling)
 	
 	Perlin noise implementation:
-		- use for landscape generation
-		- refactor it into a composition
+		- improve landscape generation / make more different landscape types
 	
 	Refactor controls:
 		- more modular/composition, less inheritance
